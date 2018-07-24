@@ -16,7 +16,7 @@ Model | Exact Match | F1
 ---- | --- | ---  
 Rnet | 69.25 | 78.97 
 BiDAF | 70.47 | 79.90 
-documentqa | ... | ... 
+documentqa | 71.46 | 80.52 
 DrQA | 68.39 | 77.90 
 QAnet | ... | ... 
 
