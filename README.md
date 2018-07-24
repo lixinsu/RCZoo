@@ -4,26 +4,28 @@ The RCZoo project is a toolkit for reading comprehension model. It contains the 
 All the models are trained and tested on the SQuAD v1.1 dataset, and reach the performance in origin papers.  
 
 ## performance
-We train each model on train set for 40 epoch, report the best performance on dev set.  
+We train each model on train set for 40 epoch, and report the best performance on dev set.  
 
 Model | Exact Match | F1  
 ---- | --- | ---  
-Rnet | xx | xx 
-BiDAF | xx | xx 
-documentqa | xx | xx 
-DrQA | xx | xx 
-QAnet | xx | xx 
+Rnet | 69.25 | 78.97 
+BiDAF | 70.47 | 79.90 
+documentqa | ... | ... 
+DrQA | 68.39 | 77.90 
+QAnet | ... | ... 
 
 
 ## Current progress
 ### [Rnet](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/05/r-net.pdf)
 - [x] training
 - [x] performance
-- [ ] predicting scripts
+- [ ] predicting scripts  
+`some different in the Dropout Layer`
 ### [BiDAF](https://arxiv.org/abs/1611.01603)
 - [x] training
 - [x] performance
-- [ ] predicting scripts
+- [ ] predicting scripts  
+`The bi-attention in BiDAF does not work fin, and I introduce the co-attention in DCN paper. The final results is better than that in origin paper`
 ### [documentqa](https://arxiv.org/abs/1710.10723)
 - [x] training
 - [x] performance
