@@ -4,9 +4,9 @@ The RCZoo project is a toolkit for reading comprehension model. It contains the 
 All the models are trained and tested on the SQuAD v1.1 dataset, and reach the performance in origin papers.  
 
 ## Dependencies
-python 3.5
-Pytorch 0.4
-tqdm
+python 3.5  
+Pytorch 0.4  
+tqdm  
 
 
 ## performance
