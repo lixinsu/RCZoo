@@ -11,6 +11,7 @@ mkdir data
 mkdir data/embeddings
 mkdir data/datasets
 mkdir data/models
+
 # Configure download location
 DOWNLOAD_PATH="./data"
 

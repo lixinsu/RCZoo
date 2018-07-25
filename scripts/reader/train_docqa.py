@@ -203,8 +203,8 @@ def init_from_scratch(args, train_exs, dev_exs):
     model = DocReader(config.get_model_args(args), word_dict, char_dict, feature_dict)
 
     # Load pretrained embeddings for words in dictionary
-    #if args.embedding_file:
-    #    model.load_embeddings(word_dict.tokens(), args.embedding_file)
+    if args.embedding_file:
+        model.load_embeddings(word_dict.tokens(), args.embedding_file)
     #print(model.network)
     return model
 
