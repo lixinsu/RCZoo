@@ -65,6 +65,17 @@ class RnnDocReader(nn.Module):
 
         self.relu_attn = nn.ReLU()
 
+        self.cq_rnn = layers.StackedBRNN(
+                    input_size=64*4,
+                    hidden_size=128,
+                    num_layers=1,
+                    dropout_rate=0.2,
+                    dropout_output=True,
+                    concat_layers=False,
+                    rnn_type=nn.GRU,
+                    padding=True,
+                )
+
         self.cc_attn = layers.SelfAttention(64*4)
 
         self.linear_self = nn.Linear(64*4, 64*4)
@@ -154,8 +165,10 @@ class RnnDocReader(nn.Module):
 
         c_fusion = self.relu_attn(c_fusion)
 
+        c_fusion_enc = self.cq_rnn( c_fusion, x1_mask)
+
         # self attention in residual net
-        self_attn = self.cc_attn(c_fusion, c_fusion, x1_mask)
+        self_attn = self.cc_attn(c_fusion_enc, c_fusion_enc, x1_mask)
 
         self_attn = self.linear_self(self_attn)
 

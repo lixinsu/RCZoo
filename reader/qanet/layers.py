@@ -99,7 +99,7 @@ class Encoder(nn.Module):
         self.sconv2 = SeparableConv(nb_out, nb_out, 7)
         self.sconv3 = SeparableConv(nb_out, nb_out, 7)
         self.sconv4 = SeparableConv(nb_out, nb_out, 7)
-        self.attn = MultiheadAttention(nb_out, 10, dropout=0.2)
+        self.attn = MultiheadAttention(nb_out, 4, dropout=0.2)
         self.ffc = nn.Linear(nb_out, nb_out)
 
     def forward(self,ori_x, x, x_mask):
@@ -127,29 +127,55 @@ class CQattn(nn.Module):
         super().__init__()
         self.linear = nn.Linear(dim*3, 1, bias=False)
 
-    def forward(self,C, Q, Cmask, Qmask):
+    def forward(self, x1, x2, x1_mask, x2_mask):
         """
-        :param C: bsz x n x dim
-        :param Q: bsz x m x dim
-        :param Cmask: bsz x n
-        :param Qmask: bsz x m
+        :param x1: b x n x d
+        :param x2: b x m x d
+        :param x1_mask: b x n
+        :param x2_mask: b x m
         """
-        shape = (C.size(0), C.size(1), Q.size(1), C.size(2))
-        # shape: bsz x n x m x dim
-        Cmask = Cmask.type(torch.float).unsqueeze(2)
-        Qmask = Qmask.type(torch.float).unsqueeze(1)
-        Ct = C.unsqueeze(2).expand(shape)
-        Qt = Q.unsqueeze(1).expand(shape)
-        CQ = Qt * Ct
-        S = torch.cat([Ct,Qt,CQ], dim=3)
-        S = self.linear(S).squeeze(3) # bsz x n x m
+        # bxnxmxd
+        x1_aug = x1.unsqueeze(2).expand(x1.size(0), x1.size(1), x2.size(1), x1.size(2))
+        x2_aug = x2.unsqueeze(1).expand(x1.size(0), x1.size(1), x2.size(1), x2.size(2))
+        x_input = torch.cat([x1_aug, x2_aug, x1_aug * x2_aug], dim=3)
+        similarity = self.linear(x_input).squeeze(3)
+        # bxnxm
+        x2_mask = x2_mask.unsqueeze(1).expand_as(similarity)
+        similarity.data.masked_fill_(x2_mask.data, -2e20)
+        # bxnxm
         # c -> q
-        S1 = F.softmax(mask_logits(S, Qmask), dim=2)
+        sim_row = F.softmax(similarity, dim=2)
+        attn_a = sim_row.bmm(x2)
         # q -> c
-        S2 = F.softmax(mask_logits(S, Cmask), dim=1)
-        A = S1.bmm(Q)
-        B = S1.bmm(S2.transpose(1,2).bmm(C))
-        return A,B
+        x1_mask = x1_mask.unsqueeze(2).expand_as(similarity)
+        similarity.data.masked_fill_(x1_mask.data, -2e20)
+        sim_col = F.softmax(similarity, dim=1)
+        q2c = sim_col.transpose(1,2).bmm(x1)
+        attn_b = sim_row.bmm(q2c)
+        return attn_a, attn_b
+   # def forward(self,C, Q, Cmask, Qmask):
+   #     """
+   #     :param C: bsz x n x dim
+   #     :param Q: bsz x m x dim
+   #     :param Cmask: bsz x n
+   #     :param Qmask: bsz x m
+   #     """
+   #     shape = (C.size(0), C.size(1), Q.size(1), C.size(2))
+   #     # shape: bsz x n x m x dim
+   #     Cmask = Cmask.type(torch.float).unsqueeze(2)
+   #     Qmask = Qmask.type(torch.float).unsqueeze(1)
+   #     Ct = C.unsqueeze(2).expand(shape)
+   #     Qt = Q.unsqueeze(1).expand(shape)
+   #     CQ = Qt * Ct
+   #     S = torch.cat([Ct,Qt,CQ], dim=3)
+   #     S = self.linear(S).squeeze(3) # bsz x n x m
+   #     # c -> q
+   #     S1 = F.softmax(mask_logits(S, Qmask), dim=2)
+   #     # q -> c
+   #     S2 = F.softmax(mask_logits(S, Cmask), dim=1)
+   #     A = S1.bmm( Q )
+   #     B = S1.bmm( S2.transpose(1,2).bmm(C) )
+   #     return A, B
 
 
 def mask_logits(target, mask):

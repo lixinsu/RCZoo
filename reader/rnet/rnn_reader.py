@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from . import layers
-
+#import layers
 
 # ------------------------------------------------------------------------------
 # Network
@@ -48,15 +48,15 @@ class RnnDocReader(nn.Module):
             input_size=doc_input_size,
             hidden_size=64,
             num_layers=3,
-            dropout_rate=0,
+            dropout_rate=0.2,
             dropout_output=True,
-            concat_layers=True,
+            concat_layers=False,
             rnn_type=nn.GRU,
             padding=True,
         )
 
         # Output sizes of rnn encoders
-        outdim = 6 * 64
+        outdim = 2 * 64
 
         self.docattn = layers.DotAttention(outdim, 128)
 
@@ -86,13 +86,13 @@ class RnnDocReader(nn.Module):
                 )
 
         # Question merging
-        self.q_attn = layers.LinearSeqAttn(6 * 64)
+        self.q_attn = layers.LinearSeqAttn(2 * 64)
 
         # pointer network
-        self.start_ptr = layers.PtrNet(6 * 64 + 128 * 2)
-        self.end_ptr = layers.PtrNet(6 * 64 + 128 * 2)
+        self.start_ptr = layers.PtrNet(2 * 64 + 128 * 2)
+        self.end_ptr = layers.PtrNet(2 * 64 + 128 * 2)
 
-        self.ptr_rnn = nn.GRUCell( 256, 384)
+        self.ptr_rnn = nn.GRUCell( 256, 128)
 
 
     def forward(self, x1, x1_c, x1_mask, x2, x2_c, x2_mask):
@@ -128,18 +128,11 @@ class RnnDocReader(nn.Module):
         x1_emb = F.dropout2d(x1_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
         x2_emb = F.dropout2d(x2_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
 
-        # Dropout on embeddings
-        if self.args.dropout_emb > 0:
-            x1_emb = nn.functional.dropout(x1_emb, p=self.args.dropout_emb,
-                                           training=self.training)
-            x2_emb = nn.functional.dropout(x2_emb, p=self.args.dropout_emb,
-                                           training=self.training)
-
         # Encode the question and context
         c = self.encode_rnn(x1_emb, x1_mask)
         q = self.encode_rnn(x2_emb, x2_mask)
-        c = F.dropout(c, p=0.2, training=self.training)
-        q = F.dropout(q, p=0.2, training=self.training)
+        #c = F.dropout(c, p=0.2, training=self.training)
+        #q = F.dropout(q, p=0.2, training=self.training)
         # attention
         qc_att = self.docattn(c, q, x2_mask)
 

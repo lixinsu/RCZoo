@@ -192,8 +192,10 @@ class DotAttention(nn.Module):
             matched_seq: batch * len1 * hdim
         """
         # Project vectors
-        x_proj = F.relu(self.linear1(x))
-        y_proj = F.relu(self.linear2(y))
+        #x_proj = F.relu(self.linear1(x))
+        #y_proj = F.relu(self.linear2(y))
+        x_proj = x
+        y_proj = y
 
 
         # Compute scores
