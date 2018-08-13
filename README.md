@@ -19,6 +19,7 @@ BiDAF | 70.47 | 79.90
 documentqa | 71.47 | 80.84 
 DrQA | 68.39 | 77.90 
 QAnet | ... | ... 
+SLQA | ... | ... 
 
 
 ## Current progress
@@ -45,7 +46,10 @@ QAnet | ... | ...
 - [x] training
 - [ ] performance
 - [ ] predicting scripts
-
+### [SLQA](http://aclweb.org/anthology/P18-1158)
+- [x] training
+- [ ] performance
+- [ ] predicting scripts
 
 ## Usage
  - run `sh download.sh` to download the dataset and the glove embeddings. 
