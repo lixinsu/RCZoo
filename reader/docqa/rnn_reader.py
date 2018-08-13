@@ -10,8 +10,8 @@ import ipdb
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-#from . import layers
-import layers
+from . import layers
+#import layers
 
 
 # ------------------------------------------------------------------------------
