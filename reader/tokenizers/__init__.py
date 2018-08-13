@@ -20,6 +20,8 @@ def set_default(key, value):
 from .corenlp_tokenizer import CoreNLPTokenizer
 from .regexp_tokenizer import RegexpTokenizer
 from .simple_tokenizer import SimpleTokenizer
+from .jieba_tokenizer import JiebaTokenizer
+from .ltp_tokenizer import LtpTokenizer
 
 # Spacy is optional
 from .spacy_tokenizer import SpacyTokenizer
@@ -34,7 +36,10 @@ def get_class(name):
         return RegexpTokenizer
     if name == 'simple':
         return SimpleTokenizer
-
+    if name == 'jieba':
+        return JiebaTokenizer
+    if name == 'ltp':
+        return LtpTokenizer
     raise RuntimeError('Invalid tokenizer: %s' % name)
 
 

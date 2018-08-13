@@ -15,7 +15,7 @@ import time
 from multiprocessing import Pool
 from multiprocessing.util import Finalize
 from functools import partial
-from drqa import tokenizers
+from reader import tokenizers
 
 # ------------------------------------------------------------------------------
 # Tokenize + annotate.
@@ -51,19 +51,31 @@ def tokenize(text):
 
 def load_dataset(path):
     """Load json file and store fields separately."""
-    with open(path) as f:
-        data = json.load(f)['data']
-    output = {'qids': [], 'questions': [], 'answers': [],
-              'contexts': [], 'qid2cid': []}
-    for article in data:
-        for paragraph in article['paragraphs']:
-            output['contexts'].append(paragraph['context'])
-            for qa in paragraph['qas']:
-                output['qids'].append(qa['id'])
-                output['questions'].append(qa['question'])
+    if 'SQuAD' in path:
+        with open(path) as f:
+            data = json.load(f)['data']
+        output = {'qids': [], 'questions': [], 'answers': [],
+                  'contexts': [], 'qid2cid': []}
+        for article in data:
+            for paragraph in article['paragraphs']:
+                output['contexts'].append(paragraph['context'])
+                for qa in paragraph['qas']:
+                    output['qids'].append(qa['id'])
+                    output['questions'].append(qa['question'])
+                    output['qid2cid'].append(len(output['contexts']) - 1)
+                    if 'answers' in qa:
+                        output['answers'].append(qa['answers'])
+    else:
+        output = {'qids': [], 'questions': [], 'answers': [],
+                  'contexts': [], 'qid2cid': []}
+        with open(path) as f:
+            for line in f:
+                row = json.loads(line)
+                output['contexts'].append(row['passage'])
+                output['questions'].append(row['query'])
+                output['qids'].append(row['query_id'])
                 output['qid2cid'].append(len(output['contexts']) - 1)
-                if 'answers' in qa:
-                    output['answers'].append(qa['answers'])
+                output['answers'].append(row['answers'])
     return output
 
 
@@ -82,14 +94,18 @@ def process_dataset(data, tokenizer, workers=None):
     tokenizer_class = tokenizers.get_class(tokenizer)
     make_pool = partial(Pool, workers, initializer=init)
     workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}}))
-    q_tokens = workers.map(tokenize, data['questions'])
+    init(tokenizer_class, {'annotators': {'lemma'}})
+    #q_tokens = workers.map(tokenize, data['questions'])
+    q_tokens = [tokenize(x) for x in data['questions'] ]
     workers.close()
     workers.join()
 
     workers = make_pool(
         initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'}})
     )
-    c_tokens = workers.map(tokenize, data['contexts'])
+    #c_tokens = workers.map(tokenize, data['contexts'])
+    init(tokenizer_class,{'annotators': {'lemma', 'pos', 'ner'}})
+    c_tokens = [tokenize(x) for x in data['contexts'] ]
     workers.close()
     workers.join()
 

@@ -27,17 +27,17 @@ import time
 for _ in range(100):
     x1 = Variable(torch.LongTensor(10, 400).cuda())
     x1.fill_(1)
-    x2 = Variable(torch.LongTensor(10, 400).cuda())
+    x2 = Variable(torch.LongTensor(10, 40).cuda())
     x2.fill_(1)
 
     x1_mask = torch.ByteTensor(10, 400).cuda()
     x1_mask.fill_(0)
-    x2_mask = torch.ByteTensor(10, 400).cuda()
+    x2_mask = torch.ByteTensor(10, 40).cuda()
     x2_mask.fill_(0)
 
     x1_c = Variable(torch.LongTensor(10, 400, 15).cuda())
     x1_c.fill_(1)
-    x2_c = Variable(torch.LongTensor(10, 400, 15).cuda())
+    x2_c = Variable(torch.LongTensor(10, 40, 15).cuda())
     x2_c.fill_(1)
 
     x  = reader(x1, x1_c, x1_mask, x2, x2_c, x2_mask)

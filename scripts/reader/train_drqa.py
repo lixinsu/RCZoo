@@ -7,14 +7,15 @@
 """Main DrQA reader training script."""
 
 import argparse
-import torch
-import numpy as np
 import json
 import os
 import sys
 import subprocess
 import logging
 
+import ipdb
+import torch
+import numpy as np
 
 from reader.drqa import utils, vector, config, data
 from reader.drqa import DocReader
@@ -302,8 +303,16 @@ def validate_official(args, data_loader, model, global_stats,
         pred_s, pred_e, _ = model.predict(ex)
 
         for i in range(batch_size):
-            s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
-            e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
+            try:
+                s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
+                e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
+            except:
+                print('====case=====')
+                print(len(offsets[ex_id[i]]))
+                print( pred_s[i][0] )
+                print( pred_e[i][0] )
+
+
             prediction = texts[ex_id[i]][s_offset:e_offset]
 
             # Compute metrics
@@ -329,8 +338,8 @@ def eval_accuracies(pred_s, target_s, pred_e, target_e):
     """
     # Convert 1D tensors to lists of lists (compatibility)
     if torch.is_tensor(target_s):
-        target_s = [[e] for e in target_s]
-        target_e = [[e] for e in target_e]
+        target_s = [[e.item()] for e in target_s]
+        target_e = [[e.item()] for e in target_e]
 
     # Compute accuracies from targets
     batch_size = len(pred_s)
