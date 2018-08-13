@@ -52,6 +52,7 @@ class StackedBRNN(nn.Module):
         self.dropout_rate = dropout_rate
         self.num_layers = num_layers
         self.concat_layers = concat_layers
+        self.linear = nn.Linear(num_layers, 1)
         self.rnns = nn.ModuleList()
         for i in range(num_layers):
             input_size = input_size if i == 0 else 2 * hidden_size
@@ -104,7 +105,10 @@ class StackedBRNN(nn.Module):
 
         # Concat hidden layers
         if self.concat_layers:
+           # output = torch.cat([x.unsqueeze(3) for x in outputs[1:]], dim=3)
+           # output = self.linear(output).squeeze(3)
             output = torch.cat(outputs[1:], 2)
+
         else:
             output = outputs[-1]
 
@@ -160,6 +164,8 @@ class StackedBRNN(nn.Module):
 
         # Concat hidden layers or take final
         if self.concat_layers:
+        #    output = torch.cat([x.unsqueeze(3) for x in outputs[1:]], dim=3)
+        #    output = self.linear(output).squeeze(3)
             output = torch.cat(outputs[1:], 2)
         else:
             output = outputs[-1]

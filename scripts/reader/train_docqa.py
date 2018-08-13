@@ -223,7 +223,6 @@ def train(args, data_loader, model, global_stats):
     # Run one epoch
     for idx, ex in enumerate(data_loader):
         train_loss.update(*model.update(ex))
-        #gc.collect()
         if idx % args.display_iter == 0:
             logger.info('train: Epoch = %d | iter = %d/%d | ' %
                         (global_stats['epoch'], idx, len(data_loader)) +

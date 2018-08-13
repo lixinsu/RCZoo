@@ -117,7 +117,8 @@ class Predictor(object):
                 'lemma': d_tokens[i].lemmas(),
                 'pos': d_tokens[i].pos(),
                 'ner': d_tokens[i].entities(),
-            })
+                'answers': [(0,0)],
+            }) # use a fake answer for keeping vectorize function invariant
 
         # Stick document tokens in candidates for decoding
         if candidates:

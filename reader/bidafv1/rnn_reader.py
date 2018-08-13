@@ -26,27 +26,31 @@ class RnnDocReader(nn.Module):
         super(RnnDocReader, self).__init__()
         # Store config
         self.args = args
-        args.char_emb = 50
+        args.char_emb = 20
 
         self.char_embedding = nn.Embedding(args.char_vocab_size,
-                                           50,
+                                           args.char_emb,
                                            padding_idx=0)
         self.emb_rnn = nn.GRU(args.char_emb,
                               args.char_emb,
                               batch_first=True,
                               bidirectional=True)
+
+
         # Word embeddings (+1 for padding)
         self.embedding = nn.Embedding(args.vocab_size,
                                       args.embedding_dim,
                                       padding_idx=0)
         self.embedding.weight.requires_grad=False
 
+        #self.cove_embedding = layers.MTLSTM()
+        #self.linear_cove = nn.Linear(args.embedding_dim*2, args.embedding_dim)
         # Input size to RNN: word emb + question emb + manual features
         # RNN document encoder
 
         dim = args.embedding_dim + args.char_emb * 2
 
-        self.emb_hw = layers.Highway( 2, dim, gate_bias=-2)
+        self.emb_hw = layers.Highway( 2, dim, gate_bias=-2 )
 
         self.enc_rnn = layers.StackedBRNN(
             input_size=dim,
@@ -119,6 +123,17 @@ class RnnDocReader(nn.Module):
         # Embed both document and question
         x1_emb = self.embedding(x1)
         x2_emb = self.embedding(x2)
+
+        # compute lengths
+        x1_lens = x1_mask.eq(0).long().sum(1).squeeze()
+        x2_lens = x2_mask.eq(0).long().sum(1).squeeze()
+        #x1_lens = torch.sum(1 - x1_mask, dim=1).type(torch.float)
+        #x2_lens = torch.sum(1 - x2_mask, dim=1).type(torch.float)
+
+        # cove embedding
+        #x1_cove_emb = self.cove_embedding(x1_emb, x1_lens)
+        #x2_cove_emb = self.cove_embedding(x2_emb, x2_lens)
+
 
 
         # concatenate the embedding from char and word

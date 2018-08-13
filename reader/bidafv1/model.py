@@ -46,6 +46,7 @@ class DocReader(object):
 
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
+        args.embedding_dim = 200
         if args.model_type == 'rnn':
             self.network = RnnDocReader(args, normalize)
         else:

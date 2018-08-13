@@ -14,7 +14,7 @@ import logging
 import json
 
 from tqdm import tqdm
-from rnet.reader import Predictor
+from reader.docqa import Predictor
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -76,14 +76,23 @@ if args.cuda:
 
 examples = []
 qids = []
-with open(args.dataset) as f:
-    data = json.load(f)['data']
-    for article in data:
-        for paragraph in article['paragraphs']:
-            context = paragraph['context']
-            for qa in paragraph['qas']:
-                qids.append(qa['id'])
-                examples.append((context, qa['question']))
+
+if 'SQuAD' in args.dataset:
+    with open(args.dataset) as f:
+        data = json.load(f)['data']
+        for article in data:
+            for paragraph in article['paragraphs']:
+                context = paragraph['context']
+                for qa in paragraph['qas']:
+                    qids.append(qa['id'])
+                    examples.append((context, qa['question']))
+else:
+    with open(args.dataset) as f:
+        for line in f:
+            data = json.loads(line)
+            examples.append((data['passage'], data['query']))
+            qids.append(data['query_id'])
+
 
 results = {}
 for i in tqdm(range(0, len(examples), args.batch_size)):
@@ -105,6 +114,6 @@ outfile = os.path.join(args.out_dir, basename + '-' + model + '.preds')
 
 logger.info('Writing results to %s' % outfile)
 with open(outfile, 'w') as f:
-    json.dump(results, f)
+    json.dump(results, f, ensure_ascii=False)
 
 logger.info('Total time: %.2f' % (time.time() - t0))

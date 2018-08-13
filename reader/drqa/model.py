@@ -213,7 +213,6 @@ class DocReader(object):
 
         # Run forward
         score_s, score_e = self.network(*inputs)
-
         # Compute loss and accuracies
         loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
 
@@ -290,6 +289,7 @@ class DocReader(object):
         # Decode predictions
         score_s = score_s.data.cpu()
         score_e = score_e.data.cpu()
+
         if candidates:
             args = (score_s, score_e, candidates, top_n, self.args.max_len)
             if async_pool:

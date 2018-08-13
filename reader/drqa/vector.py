@@ -109,19 +109,12 @@ def batchify(batch):
         x2[i, :q.size(0)].copy_(q)
         x2_mask[i, :q.size(0)].fill_(0)
 
-    # Maybe return without targets
-    if len(batch[0]) == NUM_INPUTS + NUM_EXTRA:
-        return x1, x1_f, x1_mask, x2, x2_mask, ids
-
-    elif len(batch[0]) == NUM_INPUTS + NUM_EXTRA + NUM_TARGETS:
-        # ...Otherwise add targets
-        if torch.is_tensor(batch[0][3]):
-            y_s = torch.cat([ex[3] for ex in batch])
-            y_e = torch.cat([ex[4] for ex in batch])
-        else:
-            y_s = [ex[3] for ex in batch]
-            y_e = [ex[4] for ex in batch]
+    # ...Otherwise add targets
+    if torch.is_tensor(batch[0][3]):
+        y_s = torch.cat([ex[3] for ex in batch])
+        y_e = torch.cat([ex[4] for ex in batch])
     else:
-        raise RuntimeError('Incorrect number of inputs per example.')
+        y_s = [ex[3] for ex in batch]
+        y_e = [ex[4] for ex in batch]
 
     return x1, x1_f, x1_mask, x2, x2_mask, y_s, y_e, ids
