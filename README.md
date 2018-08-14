@@ -20,6 +20,7 @@ documentqa | 71.47 | 80.84
 DrQA | 68.39 | 77.90 
 QAnet | ... | ... 
 SLQA | ... | ... 
+FusionNet | ... | ... 
 
 
 ## Current progress
@@ -48,6 +49,10 @@ SLQA | ... | ...
 - [ ] predicting scripts
 ### [SLQA](http://aclweb.org/anthology/P18-1158)
 - [x] training
+- [ ] performance
+- [ ] predicting scripts 
+### [FusionNet](https://openreview.net/forum?id=BJIgi_eCZ&noteId=BJIgi_eCZ)
+- [ ] training
 - [ ] performance
 - [ ] predicting scripts
 
