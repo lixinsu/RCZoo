@@ -332,7 +332,7 @@ class FusionLayer(nn.Module):
         Returns:
             ret: bxnxd
         """
-        m = self.linear_fusion(torch.cat([x1, x2, x1 * x2, x1 - x2], dim=2))  # bxnxd
+        m = F.tanh(self.linear_fusion(torch.cat([x1, x2, x1 * x2, x1 - x2], dim=2)))  # bxnxd
         g = F.sigmoid(self.linear_gate(torch.cat([x1, x2, x1 * x2, x1 - x2], dim=2)))   #bxnx1
         ret = g * m + (1 - g)* x2
         return ret
