@@ -155,6 +155,7 @@ class RnnDocReader(nn.Module):
         Q = self.fusion_q(Q_att, x2_pro)
 
         P_sattn = self.selfattn_p(P,P,x1_mask)
+
         D = self.fusion_self_p(P_sattn, P)
 
         D = self.enc_doc(D, x1_mask)
