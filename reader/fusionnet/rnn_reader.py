@@ -174,7 +174,7 @@ class RnnDocReader(nn.Module):
 
         self_attn = self.relu_self(self_attn)
 
-        c_fusion = c_fusion + self_attn
+        c_fusion = c_fusion #+ self_attn
 
 
         # bxnx(128*2)

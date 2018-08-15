@@ -52,7 +52,7 @@ class RnnDocReader(nn.Module):
 
         self.enc_basic_q = layers.StackedBRNN(
             input_size=dim,
-            hidden_size=128,
+            hidden_size=512,
             num_layers=2,
             dropout_rate=0.2,
             dropout_output=True,
@@ -63,7 +63,7 @@ class RnnDocReader(nn.Module):
 
         self.enc_basic_p = layers.StackedBRNN(
             input_size=dim,
-            hidden_size=128,
+            hidden_size=512,
             num_layers=2,
             dropout_rate=0.2,
             dropout_output=True,
@@ -72,7 +72,7 @@ class RnnDocReader(nn.Module):
             padding=True,
         )
 
-        hdim = 128 * 4   # 2 layers and 2 direction
+        hdim = 512 * 4   # 2 layers and 2 direction
         self.qc_attn = layers.BiAttention(hdim)
 
         self.fusion_q = layers.FusionLayer(hdim)
@@ -83,7 +83,7 @@ class RnnDocReader(nn.Module):
 
         self.enc_doc = layers.StackedBRNN(
                 input_size=hdim,
-                hidden_size=128,
+                hidden_size=512,
                 num_layers=2,
                 dropout_rate=0.2,
                 dropout_output=True,
@@ -94,7 +94,7 @@ class RnnDocReader(nn.Module):
 
         self.enc_query = layers.StackedBRNN(
                 input_size=hdim,
-                hidden_size=128,
+                hidden_size=512,
                 num_layers=2,
                 dropout_rate=0.2,
                 dropout_output=True,
