@@ -19,8 +19,8 @@ BiDAF | 70.47 | 79.90
 documentqa | 71.47 | 80.84 
 DrQA | 68.39 | 77.90 
 QAnet | ... | ... 
-SLQA | 65.34 | 75.43 
-FusionNet | ... | ... 
+SLQA | 67.09 | 76.67  
+FusionNet | 68.27 | 77.79  
 
 
 ## Current progress
@@ -50,11 +50,13 @@ FusionNet | ... | ...
 ### [SLQA](http://aclweb.org/anthology/P18-1158)
 - [x] training
 - [ ] performance
-- [ ] predicting scripts 
+- [ ] predicting scripts   
+`no elmo contextualized embedding`
 ### [FusionNet](https://openreview.net/forum?id=BJIgi_eCZ&noteId=BJIgi_eCZ)
-- [ ] training
+- [x] training
 - [ ] performance
-- [ ] predicting scripts
+- [ ] predicting scripts  
+`no CoVe embedding`
 
 ## Usage
  - run `sh download.sh` to download the dataset and the glove embeddings. 
