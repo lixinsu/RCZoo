@@ -125,7 +125,8 @@ class Encoder(nn.Module):
 class CQattn(nn.Module):
     def __init__(self, dim):
         super().__init__()
-        self.linear = nn.Linear(dim*3, 1, bias=False)
+        self.linear1 = nn.Linear(dim, dim, bias=False)
+        self.linear2 = nn.Linear(dim, dim, bias=False)
 
     def forward(self, x1, x2, x1_mask, x2_mask):
         """
@@ -135,10 +136,13 @@ class CQattn(nn.Module):
         :param x2_mask: b x m
         """
         # bxnxmxd
-        x1_aug = x1.unsqueeze(2).expand(x1.size(0), x1.size(1), x2.size(1), x1.size(2))
-        x2_aug = x2.unsqueeze(1).expand(x1.size(0), x1.size(1), x2.size(1), x2.size(2))
-        x_input = torch.cat([x1_aug, x2_aug, x1_aug * x2_aug], dim=3)
-        similarity = self.linear(x_input).squeeze(3)
+        #x1_aug = x1.unsqueeze(2).expand(x1.size(0), x1.size(1), x2.size(1), x1.size(2))
+        #x2_aug = x2.unsqueeze(1).expand(x1.size(0), x1.size(1), x2.size(1), x2.size(2))
+        #x_input = torch.cat([x1_aug, x2_aug, x1_aug * x2_aug], dim=3)
+        #similarity = self.linear(x_input).squeeze(3)
+        x1_aug = F.relu(self.linear1(x1))
+        x2_aug = F.relu(self.linear2(x2))
+        similarity  = x1_aug.bmm(x2_aug.transpose(1, 2))
         # bxnxm
         x2_mask = x2_mask.unsqueeze(1).expand_as(similarity)
         similarity.data.masked_fill_(x2_mask.data, -2e20)
