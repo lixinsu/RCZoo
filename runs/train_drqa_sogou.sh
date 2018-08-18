@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 export PYTHONPATH=`pwd`:$PYTHONPATH
-
+cd `pwd`
 #python3 scripts/reader/converter.py data/sogou/train.json data/sogou/train_std.json  train
 #python3 scripts/reader/converter.py data/sogou/dev.json data/sogou/dev_std.json  train
 #
