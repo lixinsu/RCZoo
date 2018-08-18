@@ -145,6 +145,29 @@ def load_chars(args, examples):
     return chars
 
 
+def load_pos(args, examples):
+    def _insert(iterable):
+        for w in iterable:
+            chars.add(w)
+    chars = set()
+
+    for ex in examples:
+        _insert(ex['pos'])
+        _insert(ex['q_pos'])
+    return chars
+
+
+def load_ner(args, examples):
+    def _insert(iterable):
+        for w in iterable:
+            chars.add(w)
+    chars = set()
+    for ex in examples:
+        _insert(ex['ner'])
+        _insert(ex['q_ner'])
+    return chars
+
+
 def build_word_dict(args, examples):
     """Return a dictionary from question and document words in
     provided examples.
@@ -152,7 +175,6 @@ def build_word_dict(args, examples):
     word_dict = Dictionary()
     for w in load_words(args, examples):
         word_dict.add(w)
-    print(word_dict)
     return word_dict
 
 
@@ -160,8 +182,21 @@ def build_char_dict(args, examples):
     char_dict = Dictionary()
     for c in load_chars(args, examples):
         char_dict.add(c)
-    print(char_dict)
     return char_dict
+
+
+def build_pos_dict(args, examples):
+    pos_dict = Dictionary()
+    for c in load_pos(args, examples):
+        pos_dict.add(c)
+    return pos_dict
+
+
+def build_ner_dict(args, examples):
+    ner_dict = Dictionary()
+    for c in load_ner(args, examples):
+        ner_dict.add(c)
+    return ner_dict
 
 
 def top_question_words(args, examples, word_dict):

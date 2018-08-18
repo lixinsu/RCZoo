@@ -55,9 +55,8 @@ FusionNet | 68.27 | 77.79
 ### [FusionNet](https://openreview.net/forum?id=BJIgi_eCZ&noteId=BJIgi_eCZ)
 - [x] training
 - [ ] performance
-- [ ] predicting scripts  
+- [ ] predicting scripts   
 `no CoVe embedding`
-
 ## Usage
  - run `sh download.sh` to download the dataset and the glove embeddings. 
  - run `sh train_xxx.sh` to start the train process. Dring the train process, model will be evaluated on dev set each epoch.

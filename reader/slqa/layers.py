@@ -364,3 +364,15 @@ class LinearSeqAttn(nn.Module):
         res = alpha.unsqueeze(1).bmm(x).squeeze(1)
         return res
 
+
+# function
+
+
+def seq_dropout(x, p=0, training=False):
+    """
+    x: batch * len * input_size
+    """
+    if training == False or p == 0:
+        return x
+    dropout_mask = Variable(1.0 / (1-p) * torch.bernoulli((1-p) * (x.data.new(x.size(0), x.size(2)).zero_() + 1)), requires_grad=False)
+    return dropout_mask.unsqueeze(1).expand_as(x) * x

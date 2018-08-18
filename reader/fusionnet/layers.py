@@ -343,6 +343,9 @@ class MTLSTM(nn.Module):
 
 # Attention layer
 class FullAttention(nn.Module):
+    """
+    Full attention for FusionNet
+    """
     def __init__(self, full_size, hidden_size, num_level):
         super(FullAttention, self).__init__()
         assert(hidden_size % num_level == 0)
@@ -351,15 +354,14 @@ class FullAttention(nn.Module):
         self.attsize_per_lvl = hidden_size // num_level
         self.num_level = num_level
         self.linear = nn.Linear(full_size, hidden_size, bias=False)
-        self.linear_final = Parameter(torch.ones(1, hidden_size), requires_grad = True)
+        self.linear_final = nn.Parameter(torch.ones(1, hidden_size), requires_grad = True)
         self.output_size = hidden_size
         print("Full Attention: (atten. {} -> {}, take {}) x {}".format(self.full_size, self.attsize_per_lvl, hidden_size // num_level, self.num_level))
 
-    def forward(self, x1_att, x2_att, x1, x2, x2_mask):
+    def forward(self, x1_att, x2_att, x2, x2_mask):
         """
         x1_att: batch * len1 * full_size
         x2_att: batch * len2 * full_size
-        x1: batch * len1 * hidden_size
         x2: batch * len2 * hidden_size
         x2_mask: batch * len2
         """
@@ -371,21 +373,21 @@ class FullAttention(nn.Module):
         final_v = self.linear_final.expand_as(x2_key)
         x2_key = final_v * x2_key
 
-        x1_rep = x1_key.view(-1, x1.size(1), self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, x1.size(1), self.attsize_per_lvl)
+        x1_rep = x1_key.view(-1, x1_att.size(1), self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, x1_att.size(1), self.attsize_per_lvl)
         x2_rep = x2_key.view(-1, x2.size(1), self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, x2.size(1), self.attsize_per_lvl)
 
-        scores = x1_rep.bmm(x2_rep.transpose(1, 2)).view(-1, self.num_level, x1.size(1), x2.size(1)) # batch * num_level * len1 * len2
+        scores = x1_rep.bmm(x2_rep.transpose(1, 2)).view(-1, self.num_level, x1_att.size(1), x2.size(1)) # batch * num_level * len1 * len2
 
         x2_mask = x2_mask.unsqueeze(1).unsqueeze(2).expand_as(scores)
         scores.data.masked_fill_(x2_mask.data, -float('inf'))
 
         alpha_flat = F.softmax(scores.view(-1, x2.size(1)))
-        alpha = alpha_flat.view(-1, x1.size(1), x2.size(1))
+        alpha = alpha_flat.view(-1, x1_att.size(1), x2.size(1))
 
         size_per_level = self.hidden_size // self.num_level
         atten_seq = alpha.bmm(x2.contiguous().view(-1, x2.size(1), self.num_level, size_per_level).transpose(1, 2).contiguous().view(-1, x2.size(1), size_per_level))
 
-        return atten_seq.view(-1, self.num_level, x1.size(1), size_per_level).transpose(1, 2).contiguous().view(-1, x1.size(1), self.hidden_size)
+        return atten_seq.view(-1, self.num_level, x1_att.size(1), size_per_level).transpose(1, 2).contiguous().view(-1, x1_att.size(1), self.hidden_size)
 
 # For summarizing a set of vectors into a single vector
 class LinearSelfAttn(nn.Module):
@@ -428,6 +430,103 @@ class MLPFunc(nn.Module):
         h = dropout(h, p=0.2, training=self.training)
         o = self.linear_final(h)
         return o # batch * num_classes
+
+
+class SeqAttnMatch(nn.Module):
+    """Given sequences X and Y, match sequence Y to each element in X.
+    * o_i = sum(alpha_j * y_j) for i in X
+    * alpha_j = softmax(y_j * x_i)
+    """
+
+    def __init__(self, input_size):
+        super(SeqAttnMatch, self).__init__()
+        self.linear1 = nn.Linear(input_size, input_size)
+        self.linear2 = nn.Linear(input_size, input_size)
+
+    def forward(self, x, y, y_mask):
+        """
+        Args:
+            x: batch * len1 * hdim
+            y: batch * len2 * hdim
+            y_mask: batch * len2 (1 for padding, 0 for true)
+        Output:
+            matched_seq: batch * len1 * hdim
+        """
+        # Project vectors
+        x_proj = self.linear1(x)
+        x_proj = F.relu(x_proj)
+        y_proj = self.linear2(y)
+        y_proj = F.relu(y_proj)
+
+        # Compute scores
+        scores = x_proj.bmm(y_proj.transpose(2, 1))
+
+        # Mask padding
+        y_mask = y_mask.unsqueeze(1).expand(scores.size())
+        scores.data.masked_fill_(y_mask.data, -float('inf'))
+
+        # Normalize with softmax
+        alpha = F.softmax(scores, dim=-1)
+
+        # Take weighted average
+        matched_seq = alpha.bmm(y)
+        return matched_seq
+
+
+class BilinearSeqAttn(nn.Module):
+    """A bilinear attention layer over a sequence X w.r.t y:
+    """
+
+    def __init__(self, hidden_size):
+        super(BilinearSeqAttn, self).__init__()
+        self.linear = nn.Linear(hidden_size, hidden_size)
+
+    def forward(self, x, y, x_mask):
+        """
+        Args:
+            x: batch * len * hdim1
+            y: batch * hdim2
+            x_mask: batch * len (1 for padding, 0 for true)
+        Output:
+            alpha = batch * len
+        """
+        Wy = self.linear(y) if self.linear is not None else y
+        xWy = x.bmm(Wy.unsqueeze(2)).squeeze(2)
+        xWy.data.masked_fill_(x_mask.data, -float('inf'))
+        if self.training:
+            # In training we output log-softmax for NLL
+            alpha = F.log_softmax(xWy, dim=-1)
+        else:
+            # ...Otherwise 0-1 probabilities
+            alpha = F.softmax(xWy, dim=-1)
+        return alpha
+
+
+class LinearSeqAttn(nn.Module):
+    """Self attention over a sequence:
+
+    * o_i = softmax(Wx_i) for x_i in X.
+    """
+
+    def __init__(self, input_size):
+        super(LinearSeqAttn, self).__init__()
+        self.linear = nn.Linear(input_size, 1)
+
+    def forward(self, x, x_mask):
+        """
+        Args:
+            x: batch * len * hdim
+            x_mask: batch * len (1 for padding, 0 for true)
+        Output:
+            alpha: batch * len
+        """
+        x_flat = x.view(-1, x.size(-1))
+        scores = self.linear(x_flat).view(x.size(0), x.size(1))
+        scores.data.masked_fill_(x_mask.data, -float('inf'))
+        alpha = F.softmax(scores, dim=-1)
+        attn = alpha.unsqueeze(1).bmm(x).squeeze(1)
+        return attn
+
 
 # ------------------------------------------------------------------------------
 # Functional
