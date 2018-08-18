@@ -50,12 +50,12 @@ FusionNet | 68.27 | 77.79
 ### [SLQA](http://aclweb.org/anthology/P18-1158)
 - [x] training
 - [ ] performance
-- [ ] predicting scripts 
+- [ ] predicting scripts   
 `no elmo contextualized embedding`
 ### [FusionNet](https://openreview.net/forum?id=BJIgi_eCZ&noteId=BJIgi_eCZ)
 - [x] training
 - [ ] performance
-- [ ] predicting scripts
+- [ ] predicting scripts   
 `no CoVe embedding`
 ## Usage
  - run `sh download.sh` to download the dataset and the glove embeddings. 

@@ -113,6 +113,8 @@ class Predictor(object):
                 'id': i,
                 'question': q_tokens[i].words(),
                 'qlemma': q_tokens[i].lemmas(),
+                'q_pos': q_tokens[i].pos(),
+                'q_ner': q_tokens[i].entities(),
                 'document': d_tokens[i].words(),
                 'lemma': d_tokens[i].lemmas(),
                 'pos': d_tokens[i].pos(),
