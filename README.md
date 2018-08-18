@@ -21,7 +21,7 @@ DrQA | 68.39 | 77.90
 QAnet | ... | ... 
 SLQA | 67.09 | 76.67  
 FusionNet | 68.27 | 77.79  
-
+SimpleQA | ... | ...  
 
 ## Current progress
 ### [Rnet](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/05/r-net.pdf)
