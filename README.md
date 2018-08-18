@@ -59,7 +59,7 @@ SimpleQA | ... | ...
 `no CoVe embedding`
 ## Usage
  - run `sh download.sh` to download the dataset and the glove embeddings. 
- - run `sh train_xxx.sh` to start the train process. Dring the train process, model will be evaluated on dev set each epoch.
+ - run `sh runs/train_xxx.sh` to start the train process. Dring the train process, model will be evaluated on dev set each epoch.
  
  ## acknowledgement
   some code are borrowed from [DrQA](https://github.com/facebookresearch/DrQA.git), a cool project about reading comprehension.  
