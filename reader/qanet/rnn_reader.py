@@ -108,9 +108,9 @@ class RnnDocReader(nn.Module):
         fusion = self.compose(fusion)
         M1 = self.modelenc1(x1, fusion, x1_mask)
         M2 = self.modelenc2(x1, M1, x1_mask)
-        M3 = self.modelenc3(x1, M2, x1_mask)
+       # M3 = self.modelenc3(x1, M2, x1_mask)
         starts = self.linears(torch.cat([M1,M2],dim=2)).squeeze(2)
-        ends = self.lineare(torch.cat([M1,M3],dim=2)).squeeze(2)
+        ends = self.lineare(torch.cat([M1,M2],dim=2)).squeeze(2)
         if self.training:
             start_scores = F.log_softmax(starts,dim=1)
             end_scores = F.log_softmax(ends, dim=1)

@@ -97,6 +97,7 @@ def batchify(batch):
     questions_char = [ex[3] for ex in batch]
     # Batch documents and features
     max_length = max([d.size(0) for d in docs])
+    #max_length = 400
     x1 = torch.LongTensor(len(docs), max_length).zero_()
     x1_c = torch.LongTensor(len(docs), max_length, word_len).zero_()
     x1_mask = torch.ByteTensor(len(docs), max_length).fill_(1)
@@ -107,6 +108,7 @@ def batchify(batch):
 
     # Batch questions
     max_length = max([q.size(0) for q in questions])
+    #max_length = 20
     x2 = torch.LongTensor(len(questions), max_length).zero_()
     x2_c = torch.LongTensor(len(questions), max_length, word_len).zero_()
     x2_mask = torch.ByteTensor(len(questions), max_length).fill_(1)
