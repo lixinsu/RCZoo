@@ -15,7 +15,7 @@ import os
 import sys
 import subprocess
 import logging
-
+from tensorboardX import SummaryWriter
 
 from reader.docqa import utils, vector, config, data
 from reader.docqa import DocReader
@@ -48,6 +48,10 @@ def add_train_args(parser):
     runtime = parser.add_argument_group('Environment')
     runtime.add_argument('--no-cuda', type='bool', default=False,
                          help='Train on CPU, even if GPUs are available.')
+    runtime.add_argument('--exp-id', type=str, default="test",
+            help='Used to label the experiment id')
+    runtime.add_argument('--exp-desc', type=str, default="test exp",
+            help='Used to the experiment')
     runtime.add_argument('--gpu', type=int, default=-1,
                          help='Run on a specific GPU')
     runtime.add_argument('--data-workers', type=int, default=5,
@@ -253,12 +257,13 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     start_acc = utils.AverageMeter()
     end_acc = utils.AverageMeter()
     exact_match = utils.AverageMeter()
+    loss = utils.AverageMeter()
 
     # Make predictions
     examples = 0
     for ex in data_loader:
         batch_size = ex[0].size(0)
-        pred_s, pred_e, _ = model.predict(ex)
+        (pred_s, pred_e, _), batch_loss = model.predict(ex)
         target_s, target_e = ex[-3:-1]
 
         # We get metrics for independent start/end and joint start/end
@@ -266,7 +271,7 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
         start_acc.update(accuracies[0], batch_size)
         end_acc.update(accuracies[1], batch_size)
         exact_match.update(accuracies[2], batch_size)
-
+        loss.update(batch_loss, batch_size)
         # If getting train accuracies, sample max 10k
         examples += batch_size
         if mode == 'train' and examples >= 1e4:
@@ -278,7 +283,7 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
                 (end_acc.avg, exact_match.avg, examples) +
                 'valid time = %.2f (s)' % eval_time.time())
 
-    return {'exact_match': exact_match.avg}
+    return {'loss': loss.avg, 'exact_match': exact_match.avg}
 
 
 def validate_official(args, data_loader, model, global_stats,
@@ -299,7 +304,7 @@ def validate_official(args, data_loader, model, global_stats,
     examples = 0
     for ex in data_loader:
         ex_id, batch_size = ex[-1], ex[0].size(0)
-        pred_s, pred_e, _ = model.predict(ex)
+        ( pred_s, pred_e, _ ), _= model.predict(ex)
 
         for i in range(batch_size):
             s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
@@ -483,6 +488,7 @@ def main(args):
     logger.info('-' * 100)
     logger.info('Starting training...')
     stats = {'timer': utils.Timer(), 'epoch': 0, 'best_valid': 0}
+    writer = SummaryWriter('data/runs')
     for epoch in range(start_epoch, args.num_epochs):
         stats['epoch'] = epoch
 
@@ -490,16 +496,22 @@ def main(args):
         train(args, train_loader, model, stats)
 
         # Validate unofficial (train)
-        validate_unofficial(args, train_loader, model, stats, mode='train')
+        result = validate_unofficial(args, train_loader, model, stats, mode='train')
+        tr_loss = result['loss']
 
         # Validate unofficial (dev)
         result = validate_unofficial(args, dev_loader, model, stats, mode='dev')
+        dev_loss = result['loss']
 
+        dev_em, dev_f1 = 0, 0
         # Validate official
         if args.official_eval:
             result = validate_official(args, dev_loader, model, stats,
                                        dev_offsets, dev_texts, dev_answers)
+            dev_em, dev_f1 = result['exact_match'], result['f1']
 
+        writer.add_scalars('docqa/%s_loss' % args.exp_id, {'tr_loss': torch.Tensor(1).fill_(tr_loss), 'dev_loss': torch.Tensor(1).fill_(dev_loss)}, epoch)
+        writer.add_scalars('docqa/%s_metric' % args.exp_id, {'em': torch.Tensor(1).fill_(dev_em), 'f1': torch.Tensor(1).fill_(dev_f1)}, epoch)
         # Save best valid
         if result[args.valid_metric] > stats['best_valid']:
             logger.info('Best valid: %s = %.2f (epoch %d, %d updates)' %

@@ -492,7 +492,7 @@ def main(args):
     logger.info('Starting training...')
     stats = {'timer': utils.Timer(), 'epoch': 0, 'best_valid': 0}
 
-    writer = SummaryWriter('data/runs/bidaf')
+    writer = SummaryWriter('data/runs')
 
     for epoch in range(start_epoch, args.num_epochs):
         stats['epoch'] = epoch
@@ -516,8 +516,8 @@ def main(args):
                                        dev_offsets, dev_texts, dev_answers)
             dev_em, dev_f1 = result['exact_match'], result['f1']
 
-        writer.add_scalars('data/%s_loss' % args.exp_id, {'tr_loss': torch.Tensor(1).fill_(tr_loss), 'dev_loss': torch.Tensor(1).fill_(dev_loss)}, epoch)
-        writer.add_scalars('data/%s_metric' % args.exp_id, {'em': torch.Tensor(1).fill_(dev_em), 'f1': torch.Tensor(1).fill_(dev_f1)}, epoch)
+        writer.add_scalars('bidaf/%s_loss' % args.exp_id, {'tr_loss': torch.Tensor(1).fill_(tr_loss), 'dev_loss': torch.Tensor(1).fill_(dev_loss)}, epoch)
+        writer.add_scalars('bidaf/%s_metric' % args.exp_id, {'em': torch.Tensor(1).fill_(dev_em), 'f1': torch.Tensor(1).fill_(dev_f1)}, epoch)
         # Save best valid
         if result[args.valid_metric] > stats['best_valid']:
             logger.info('Best valid: %s = %.2f (epoch %d, %d updates)' %
