@@ -6,7 +6,6 @@
 # LICENSE file in the root directory of this source tree.
 """Implementation of the RNN based DrQA reader."""
 
-import ipdb
 import torch
 import torch.nn as nn
 from torch.nn import functional as F

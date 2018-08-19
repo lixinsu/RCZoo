@@ -46,7 +46,6 @@ class DocReader(object):
 
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
-        args.embedding_dim = 200
         if args.model_type == 'rnn':
             self.network = RnnDocReader(args, normalize)
         else:
@@ -283,13 +282,23 @@ class DocReader(object):
             inputs = [e if e is None else
                       Variable(e.cuda(async=True))
                       for e in ex[:6]]
+            gt_s =  [x[0] for x in ex[6]]
+            gt_e =  [x[0] for x in ex[7]]
+            target_s = torch.LongTensor(gt_s).cuda()
+            target_e = torch.LongTensor(gt_e).cuda()
         else:
             inputs = [e if e is None else Variable(e)
                       for e in ex[:6]]
+            gt_s =  [x[0] for x in ex[6]]
+            gt_e =  [x[0] for x in ex[7]]
+            target_s = torch.LongTensor(gt_s)
+            target_e = torch.LongTensor(gt_e)
 
         # Run forward
-        with torch.no_grad():
-            score_s, score_e = self.network(*inputs)
+        score_s, score_e = self.network(*inputs)
+
+
+        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
 
         # Decode predictions
         score_s = score_s.data.cpu()
@@ -305,7 +314,7 @@ class DocReader(object):
             if async_pool:
                 return async_pool.apply_async(self.decode, args)
             else:
-                return self.decode(*args)
+                return self.decode(*args), loss.item()
 
     @staticmethod
     def decode(score_s, score_e, top_n=1, max_len=None):
