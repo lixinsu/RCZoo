@@ -279,15 +279,15 @@ class DocReader(object):
             inputs = [e if e is None else
                       Variable(e.cuda(async=True), volatile=True)
                       for e in ex[:5]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
+            gt_s =  [x[0] for x in ex[5]]
+            gt_e =  [x[0] for x in ex[6]]
             target_s = torch.LongTensor(gt_s).cuda()
             target_e = torch.LongTensor(gt_e).cuda()
         else:
             inputs = [e if e is None else Variable(e, volatile=True)
                       for e in ex[:5]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
+            gt_s =  [x[0] for x in ex[5]]
+            gt_e =  [x[0] for x in ex[6]]
             target_s = torch.LongTensor(gt_s)
             target_e = torch.LongTensor(gt_e)
         # Run forward

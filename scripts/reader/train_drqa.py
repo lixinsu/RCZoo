@@ -386,7 +386,7 @@ def main(args):
     logger.info('Load data files')
     train_exs = utils.load_data(args, args.train_file, skip_no_answer=True)
     logger.info('Num train examples = %d' % len(train_exs))
-    dev_exs = utils.load_data(args, args.dev_file)
+    dev_exs = utils.load_data(args, args.dev_file, skip_no_answer=True)
     logger.info('Num dev examples = %d' % len(dev_exs))
 
     # If we are doing offician evals then we need to:
