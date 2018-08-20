@@ -47,6 +47,10 @@ def add_train_args(parser):
 
     # Runtime environment
     runtime = parser.add_argument_group('Environment')
+    runtime.add_argument('--exp-id', type=str, default="test",
+                         help='Used to label the experiment id')
+    runtime.add_argument('--exp-desc', type=str, default="test exp",
+                         help='Used to the experiment')
     runtime.add_argument('--no-cuda', type='bool', default=False,
                          help='Train on CPU, even if GPUs are available.')
     runtime.add_argument('--gpu', type=int, default=-1,
