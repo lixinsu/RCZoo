@@ -15,6 +15,7 @@ import os
 import sys
 import subprocess
 import logging
+from tensorboardX import SummaryWriter
 
 
 from reader.slqa import utils, vector, config, data
