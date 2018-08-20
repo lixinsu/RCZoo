@@ -36,7 +36,6 @@ def load_data(args, filename, skip_no_answer=False):
             if len(data['answers']) > 0:
                 examples.append(data)
             else:
-
                 cnt_bad += 1
     print('%s has %s bad lines' % (filename, cnt_bad))
     # Make case insensitive?

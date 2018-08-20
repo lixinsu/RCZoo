@@ -28,8 +28,16 @@ def load_data(args, filename, skip_no_answer=False):
     One example per line, JSON encoded.
     """
     # Load JSON lines
+    examples = []
+    cnt_bad = 0
     with open(filename) as f:
-        examples = [json.loads(line) for line in f]
+        for line in f:
+            data = json.loads(line)
+            if len(data['answers']) > 0:
+                examples.append(data)
+            else:
+                cnt_bad += 1
+    logger.info('%s has %s bad lines' % (filename, cnt_bad))
 
     # Make case insensitive?
     if args.uncased_question or args.uncased_doc:
