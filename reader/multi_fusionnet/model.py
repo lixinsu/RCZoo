@@ -438,6 +438,7 @@ class DocReader(object):
         saved_params = torch.load(
             filename, map_location=lambda storage, loc: storage
         )
+        print(saved_params.keys())
         all_dicts = saved_params['all_dicts']
         state_dict = saved_params['state_dict']
         args = saved_params['args']
