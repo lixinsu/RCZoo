@@ -131,7 +131,7 @@ def process_dataset(data, tokenizer, workers=None, multispan=False):
         lemma = c_tokens[data['qid2cid'][idx]]['lemma']
         pos = c_tokens[data['qid2cid'][idx]]['pos']
         ner = c_tokens[data['qid2cid'][idx]]['ner']
-        if multispan:
+        if not multispan:
             ans_tokens = []
             if len(data['answers']) > 0:
                 for ans in data['answers'][idx]:
@@ -141,9 +141,9 @@ def process_dataset(data, tokenizer, workers=None, multispan=False):
                     if found:
                         ans_tokens.append(found)
         else:
-            ans_token  = []
+            ans_tokens  = []
             for iter_ans_indices in data['positions'][idx]:
-                ans_token_inices.append(find_answer(offsets, iter_ans_indices[0], iter_ans_indices[1]))
+                ans_tokens.append(find_answer(offsets, iter_ans_indices[0], iter_ans_indices[1]))
 
         yield {
             'id': data['qids'][idx],

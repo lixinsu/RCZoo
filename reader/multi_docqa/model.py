@@ -9,6 +9,7 @@
 import ipdb
 import torch
 import torch.optim as optim
+import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import logging
@@ -42,6 +43,7 @@ class DocReader(object):
         self.args.num_features = len(feature_dict)
         self.updates = 0
         self.use_cuda = False
+        self.bce = nn.BCELoss()
         self.parallel = False
         def get_n_params(model):
             pp=0

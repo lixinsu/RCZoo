@@ -42,8 +42,6 @@ class RnnDocReader(nn.Module):
         self.embedding.weight.requires_grad=False
 
         # Input size to RNN: word emb + question emb + manual features
-        # RNN document encoder
-
         dim = args.embedding_dim + args.char_emb * 2
 
         self.emb_hw = layers.Highway( 2, dim, gate_bias=-2)
@@ -165,17 +163,18 @@ class RnnDocReader(nn.Module):
 
         c_fusion = self.relu_attn(c_fusion)
 
-        c_fusion_enc = self.cq_rnn( c_fusion, x1_mask)
+        #c_fusion_enc = self.cq_rnn( c_fusion, x1_mask)
 
         # self attention in residual net
-        self_attn = self.cc_attn(c_fusion_enc, c_fusion_enc, x1_mask)
+        #self_attn = self.cc_attn(c_fusion_enc, c_fusion_enc, x1_mask)
 
-        self_attn = self.linear_self(self_attn)
+        #self_attn = self.linear_self(self_attn)
 
-        self_attn = self.relu_self(self_attn)
+        #self_attn = self.relu_self(self_attn)
 
-        c_fusion = c_fusion + self_attn
-
+        #c_fusion = c_fusion + self_attn
+        # version 2
+        c_fusion = c_fusion
 
         # bxnx(128*2)
         g1 = self.fusion_rnn1(c_fusion, x1_mask)
@@ -186,7 +185,7 @@ class RnnDocReader(nn.Module):
         start_logits.data.masked_fill_(x1_mask.data, -2e20)
 
         # bxn
-        softmax_start = F.softmax(start_logits, dim=1)
+        softmax_start = F.sigmoid(start_logits)
 
 
         # bx(128*2)
@@ -202,14 +201,18 @@ class RnnDocReader(nn.Module):
 
         end_logits.data.masked_fill_(x1_mask.data, -2e20)
 
-        softmax_end = F.softmax(end_logits, dim=1)
+        #softmax_end = F.softmax(end_logits, dim=1)
+        softmax_end = F.sigmoid(end_logits)
 
-        if self.training:
-            start_scores = torch.log(softmax_start + 1e-20)
-            end_scores = torch.log(softmax_end + 1e-20)
-        else:
-            start_scores = softmax_start
-            end_scores = softmax_end
+        #if self.training:
+        #    start_scores = torch.log(softmax_start + 1e-20)
+        #    end_scores = torch.log(softmax_end + 1e-20)
+        #else:
+        #    start_scores = softmax_start
+        #    end_scores = softmax_end
+
+        start_scores = softmax_start
+        end_scores = softmax_end
 
         return start_scores, end_scores
 

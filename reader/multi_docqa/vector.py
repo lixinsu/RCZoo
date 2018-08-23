@@ -83,4 +83,4 @@ def batchify(batch):
             yy_s[i,y_s[i][j]] = 1
             yy_e[i,y_e[i][j]] = 1
 
-    return x1, x1_c, x1_mask, x2, x2_c, x2_mask, y_s, y_e, ids
+    return x1, x1_c, x1_mask, x2, x2_c, x2_mask, yy_s, yy_e, ids
