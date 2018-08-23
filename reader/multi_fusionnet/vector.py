@@ -83,12 +83,8 @@ def vectorize(ex, model, single_answer=False):
         for i, w in enumerate(ex['document']):
             features[i][feature_dict['tf']] = counter[w.lower()] * 1.0 / l
 
-    if single_answer:
-        start = torch.LongTensor(1).fill_(ex['answers'][0][0])
-        end = torch.LongTensor(1).fill_(ex['answers'][0][1])
-    else:
-        start = [a[0] for a in ex['answers']]
-        end = [a[1] for a in ex['answers']]
+    start = [a[0] for a in ex['answers']]
+    end = [a[1] for a in ex['answers']]
 
     return ex['document'], ex['question'], document, document_char, d_pos, d_ner, question, question_char, q_pos, q_ner, features, start, end, ex['id']
 
@@ -148,11 +144,13 @@ def batchify(batch):
         x2_c[i, :q.size(0)].copy_(qc[i])
         x2_mask[i, :q.size(0)].fill_(0)
 
-    if torch.is_tensor(batch[0][11]):
-        y_s = torch.cat([ex[11] for ex in batch])
-        y_e = torch.cat([ex[12] for ex in batch])
-    else:
-        y_s = [ex[11] for ex in batch]
-        y_e = [ex[12] for ex in batch]
+    y_s = [ex[11] for ex in batch]
+    y_e = [ex[12] for ex in batch]
+    yy_s = torch.Tensor(len(docs), x1.size(1)).fill_(0)
+    yy_e = torch.Tensor(len(docs), x1.size(1)).fill_(0)
+    for i in range(len(batch)):
+        for j in range(len(y_s[i])):
+            yy_s[i,y_s[i][j]] = 1
+            yy_e[i,y_e[i][j]] = 1
 
-    return x1, x1_p, x1_e, x1_c, x1_mask, x2, x2_p, x2_e, x2_c, x2_mask, x1_f ,y_s, y_e, ids
+    return x1, x1_p, x1_e, x1_c, x1_mask, x2, x2_p, x2_e, x2_c, x2_mask, x1_f ,yy_s, yy_e, ids

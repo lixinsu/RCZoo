@@ -230,7 +230,8 @@ class DocReader(object):
         score_s, score_e = self.network(*inputs)
         # Compute loss and accuracies
 
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        #loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        loss = F.binary_cross_entropy(score_s, target_s) + F.binary_cross_entropy(score_e, target_e)
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()
@@ -294,38 +295,17 @@ class DocReader(object):
             inputs = [e if e is None else
                       Variable(e.cuda(async=True))
                       for e in ex[:11]]
-            gt_s =  [x[0] for x in ex[11]]
-            gt_e =  [x[0] for x in ex[12]]
-            target_s = torch.LongTensor(gt_s).cuda()
-            target_e = torch.LongTensor(gt_e).cuda()
         else:
             inputs = [e if e is None else Variable(e)
                       for e in ex[:11]]
-            gt_s =  [x[0] for x in ex[11]]
-            gt_e =  [x[0] for x in ex[12]]
-            target_s = torch.LongTensor(gt_s)
-            target_e = torch.LongTensor(gt_e)
 
         # Run forward
         score_s, score_e = self.network(*inputs)
 
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
-
         # Decode predictions
         score_s = score_s.data.cpu()
         score_e = score_e.data.cpu()
-        if candidates:
-            args = (score_s, score_e, candidates, top_n, self.args.max_len)
-            if async_pool:
-                return async_pool.apply_async(self.decode_candidates, args)
-            else:
-                return self.decode_candidates(*args)
-        else:
-            args = (score_s, score_e, top_n, self.args.max_len)
-            if async_pool:
-                return async_pool.apply_async(self.decode, args)
-            else:
-                return self.decode(*args), loss.item()
+        return score_s, score_e
 
     @staticmethod
     def decode(score_s, score_e, top_n=1, max_len=None):

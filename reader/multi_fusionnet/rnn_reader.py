@@ -204,4 +204,3 @@ class RnnDocReader(nn.Module):
         end_scores = self.end_attn(x1_u, x2_vec, x1_mask)
 
         return start_scores, end_scores
-
