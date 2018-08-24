@@ -537,7 +537,7 @@ def main(args):
                                        dev_offsets, dev_texts, dev_answers)
             dev_em, dev_f1 = result['exact_match'], result['f1']
 
-        writer.add_scalars('multi_docqa/%s_metric' % args.exp_id, {'em': torch.Tensor(1).fill_(dev_em), 'f1': torch.Tensor(1).fill_(dev_f1)}, epoch)
+        writer.add_scalars('multi_fusionnet/%s_metric' % args.exp_id, {'em': torch.Tensor(1).fill_(dev_em), 'f1': torch.Tensor(1).fill_(dev_f1)}, epoch)
         # Save best valid
         if result[args.valid_metric] > stats['best_valid']:
             logger.info('Best valid: %s = %.2f (epoch %d, %d updates)' %

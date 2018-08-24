@@ -118,7 +118,7 @@ class Encoder(nn.Module):
         out = out + out3
         out1 = self.ffc(out)
         out1 = out1 + out
-        return out
+        return out1
 
 
 
