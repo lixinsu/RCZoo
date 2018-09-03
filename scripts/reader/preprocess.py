@@ -66,7 +66,7 @@ def load_dataset(path):
                     output['qid2cid'].append(len(output['contexts']) - 1)
                     if 'answers' in qa:
                         output['answers'].append(qa['answers'])
-    elif 'multispan' in path:
+    elif 'multispan' in path or 'baseline' in  path:
         output =  {'qids':[], 'questions':[], 'answers': [], 'contexts': [], 'qid2cid': [], 'positions': []}
         with open(path) as f:
             for line in f:
@@ -185,7 +185,7 @@ out_file = os.path.join(
 )
 print('Will write to file %s' % out_file, file=sys.stderr)
 multispan = False
-if 'multispan' in in_file:
+if 'multispan' in in_file or 'baseline' in in_file:
     multispan = True
 with open(out_file, 'w') as f:
     for ex in process_dataset(dataset, args.tokenizer, args.workers, multispan=multispan):

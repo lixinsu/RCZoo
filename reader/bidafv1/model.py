@@ -434,6 +434,7 @@ class DocReader(object):
         params = {
             'state_dict': network.state_dict(),
             'word_dict': self.word_dict,
+            'char_dict': self.char_dict,
             'feature_dict': self.feature_dict,
             'args': self.args,
             'epoch': epoch,
@@ -451,12 +452,13 @@ class DocReader(object):
             filename, map_location=lambda storage, loc: storage
         )
         word_dict = saved_params['word_dict']
+        char_dict = saved_params['char_dict']
         feature_dict = saved_params['feature_dict']
         state_dict = saved_params['state_dict']
         args = saved_params['args']
         if new_args:
             args = override_model_args(args, new_args)
-        return DocReader(args, word_dict, feature_dict, state_dict, normalize)
+        return DocReader(args, word_dict, char_dict, feature_dict, state_dict, normalize)
 
     @staticmethod
     def load_checkpoint(filename, normalize=True):

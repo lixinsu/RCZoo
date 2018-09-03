@@ -6,10 +6,13 @@
 import json
 import sys
 import os
+import ipdb
 
 
 def load_pred(filename):
     ans = json.load(open(filename))
+    if 'baseline' in filename:
+        ans = {x:[ans[x][0][0]] for x in ans}
     print('prediction numbers: %s ' % len(ans))
     return ans
 
