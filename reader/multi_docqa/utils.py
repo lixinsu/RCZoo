@@ -36,6 +36,7 @@ def load_data(args, filename, skip_no_answer=False):
             if len(data['answers']) > 0:
                 examples.append(data)
             else:
+
                 cnt_bad += 1
     print('%s has %s bad lines' % (filename, cnt_bad))
     # Make case insensitive?
@@ -53,53 +54,26 @@ def load_data(args, filename, skip_no_answer=False):
     return examples
 
 
-
 def load_text(filename):
     """Load the paragraphs only of a SQuAD dataset. Store as qid -> text."""
     # Load JSON file
-    if 'SQuAD' in filename:
-        with open(filename) as f:
-            examples = json.load(f)['data']
-
-        texts = {}
-        for article in examples:
-            for paragraph in article['paragraphs']:
-                for qa in paragraph['qas']:
-                    texts[qa['id']] = paragraph['context']
-    else:
-        texts = {}
-        with open(filename) as f:
-            for line in f:
-                row = json.loads(line)
-                texts[row['query_id']] = row['passage']
+    texts = {}
+    with open(filename) as f:
+        for line in f:
+            row = json.loads(line)
+            texts[row['query_id']] = row['passage']
     return texts
-
 
 
 def load_answers(filename):
     """Load the answers only of a SQuAD dataset. Store as qid -> [answers]."""
     # Load JSON file
-    if 'SQuAD' in filename:
-        with open(filename) as f:
-            examples = json.load(f)['data']
-
-        ans = {}
-        for article in examples:
-            for paragraph in article['paragraphs']:
-                for qa in paragraph['qas']:
-                    ans[qa['id']] = list(map(lambda x: x['text'], qa['answers']))
-    elif 'baseline' in filename:
-        ans = {}
-        with open(filename) as f:
-            for line in f :
-                row = json.loads(line)
-                ans[row['query_id']] = row['answers']
-    else:
-        ans = {}
+    ans = {}
+    with open(filename) as f:
         with open(filename) as f:
             for line in f:
-                row = json.loads(line)
-                ans[row['query_id']] = list(map(lambda x: x['text'], row['answers']))
+                data = json.loads(line)
+                ans[data['query_id']] = data['answers']
     return ans
 
 # ------------------------------------------------------------------------------

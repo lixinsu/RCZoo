@@ -117,8 +117,8 @@ class Predictor(object):
                 'lemma': d_tokens[i].lemmas(),
                 'pos': d_tokens[i].pos(),
                 'ner': d_tokens[i].entities(),
-                'answers': [(0,0)]
-            })
+                'answers': [(0,0)],
+            }) # use a fake answer for keeping vectorize function invariant
 
         # Stick document tokens in candidates for decoding
         if candidates:
@@ -127,17 +127,29 @@ class Predictor(object):
 
         # Build the batch and run it through the model
         batch_exs = batchify([vectorize(e, self.model) for e in examples])
-        (s, e, score), _ = self.model.predict(batch_exs, candidates, top_n)
+        s, e = self.model.predict(batch_exs, candidates, top_n)
 
-        # Retrieve the predicted spans
-        results = []
+        answers = []
         for i in range(len(s)):
-            predictions = []
-            for j in range(len(s[i])):
-                span = d_tokens[i].slice(s[i][j], e[i][j] + 1).untokenize()
-                predictions.append((span, score[i][j]))
-            results.append(predictions)
-        return results
+            answers.append(self.decode(d_tokens[i], s[i], e[i], thresh=0.5))
+
+        return answers
+
+
+    def decode(self, d_tokens, s, e ,thresh=0.5):
+        start_indices = [ 1 if x > thresh else 0 for x in s ]
+        end_indices = [ 1 if x > thresh else 0 for x in e ]
+        answers = []
+        idx =0
+        while idx < len(start_indices):
+            if start_indices[idx] == 1:
+                for end_idx in range(idx,len(end_indices)):
+                    if end_indices[end_idx] == 1:
+                        answers.append(d_tokens.slice(idx, end_idx + 1).untokenize())
+                        idx = end_idx
+                        break
+            idx += 1
+        return answers
 
     def cuda(self):
         self.model.cuda()

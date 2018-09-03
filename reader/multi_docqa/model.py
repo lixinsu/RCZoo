@@ -9,6 +9,7 @@
 import ipdb
 import torch
 import torch.optim as optim
+import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import logging
@@ -42,12 +43,21 @@ class DocReader(object):
         self.args.num_features = len(feature_dict)
         self.updates = 0
         self.use_cuda = False
+        self.bce = nn.BCELoss()
         self.parallel = False
-
+        def get_n_params(model):
+            pp=0
+            for p in list(model.parameters()):
+                nn=1
+                for s in list(p.size()):
+                    nn = nn*s
+                pp += nn
+            return pp
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
             self.network = RnnDocReader(args, normalize)
+            print( get_n_params(self.network) )
         else:
             raise RuntimeError('Unsupported model: %s' % args.model_type)
 
@@ -213,17 +223,13 @@ class DocReader(object):
         score_s, score_e = self.network(*inputs)
         # Compute loss and accuracies
 
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        # loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        loss = self.bce(score_s, target_s) + self.bce(score_e, target_e)
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()
         loss.backward()
-        #for name, param in self.network.named_parameters():
-        #    if param.requires_grad:
-        #        print("-"*40,name,"-"*40)
-        #        print(torch.sum(param.grad))
-        #        print(torch.sum(torch.abs(param.grad)))
-        # Clip gradients
+
         torch.nn.utils.clip_grad_norm(self.network.parameters(),
                                       self.args.grad_clipping)
 
@@ -233,8 +239,8 @@ class DocReader(object):
 
         # Reset any partially fixed parameters (e.g. rare words)
         self.reset_parameters()
-
-        return loss.data[0].item(), ex[0].size(0)
+        lossval = loss.item()
+        return lossval, ex[0].size(0)
 
     def reset_parameters(self):
         """Reset any partially fixed parameters to original states."""
@@ -280,125 +286,20 @@ class DocReader(object):
         # Transfer to GPU
         if self.use_cuda:
             inputs = [e if e is None else
-                      Variable(e.cuda(async=True), volatile=True)
+                      Variable(e.cuda(async=True))
                       for e in ex[:6]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
-            target_s = torch.LongTensor(gt_s).cuda()
-            target_e = torch.LongTensor(gt_e).cuda()
         else:
-            inputs = [e if e is None else Variable(e, volatile=True)
+            inputs = [e if e is None else Variable(e)
                       for e in ex[:6]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
-            target_s = torch.LongTensor(gt_s)
-            target_e = torch.LongTensor(gt_e)
 
         # Run forward
         score_s, score_e = self.network(*inputs)
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+
 
         # Decode predictions
         score_s = score_s.data.cpu()
         score_e = score_e.data.cpu()
-        if candidates:
-            args = (score_s, score_e, candidates, top_n, self.args.max_len)
-            if async_pool:
-                return async_pool.apply_async(self.decode_candidates, args)
-            else:
-                return self.decode_candidates(*args)
-        else:
-            args = (score_s, score_e, top_n, self.args.max_len)
-            if async_pool:
-                return async_pool.apply_async(self.decode, args)
-            else:
-                return self.decode(*args), loss.item()
-
-    @staticmethod
-    def decode(score_s, score_e, top_n=1, max_len=None):
-        """Take argmax of constrained score_s * score_e.
-
-        Args:
-            score_s: independent start predictions
-            score_e: independent end predictions
-            top_n: number of top scored pairs to take
-            max_len: max span length to consider
-        """
-        pred_s = []
-        pred_e = []
-        pred_score = []
-        max_len = max_len or score_s.size(1)
-        for i in range(score_s.size(0)):
-            # Outer product of scores to get full p_s * p_e matrix
-            scores = torch.ger(score_s[i], score_e[i])
-
-            # Zero out negative length and over-length span scores
-            scores.triu_().tril_(max_len - 1)
-
-            # Take argmax or top n
-            scores = scores.numpy()
-            scores_flat = scores.flatten()
-            if top_n == 1:
-                idx_sort = [np.argmax(scores_flat)]
-            elif len(scores_flat) < top_n:
-                idx_sort = np.argsort(-scores_flat)
-            else:
-                idx = np.argpartition(-scores_flat, top_n)[0:top_n]
-                idx_sort = idx[np.argsort(-scores_flat[idx])]
-            s_idx, e_idx = np.unravel_index(idx_sort, scores.shape)
-            pred_s.append(s_idx)
-            pred_e.append(e_idx)
-            pred_score.append(scores_flat[idx_sort])
-        return pred_s, pred_e, pred_score
-
-    @staticmethod
-    def decode_candidates(score_s, score_e, candidates, top_n=1, max_len=None):
-        """Take argmax of constrained score_s * score_e. Except only consider
-        spans that are in the candidates list.
-        """
-        pred_s = []
-        pred_e = []
-        pred_score = []
-        for i in range(score_s.size(0)):
-            # Extract original tokens stored with candidates
-            tokens = candidates[i]['input']
-            cands = candidates[i]['cands']
-
-            if not cands:
-                # try getting from globals? (multiprocessing in pipeline mode)
-                from ..pipeline.drqa import PROCESS_CANDS
-                cands = PROCESS_CANDS
-            if not cands:
-                raise RuntimeError('No candidates given.')
-
-            # Score all valid candidates found in text.
-            # Brute force get all ngrams and compare against the candidate list.
-            max_len = max_len or len(tokens)
-            scores, s_idx, e_idx = [], [], []
-            for s, e in tokens.ngrams(n=max_len, as_strings=False):
-                span = tokens.slice(s, e).untokenize()
-                if span in cands or span.lower() in cands:
-                    # Match! Record its score.
-                    scores.append(score_s[i][s] * score_e[i][e - 1])
-                    s_idx.append(s)
-                    e_idx.append(e - 1)
-
-            if len(scores) == 0:
-                # No candidates present
-                pred_s.append([])
-                pred_e.append([])
-                pred_score.append([])
-            else:
-                # Rank found candidates
-                scores = np.array(scores)
-                s_idx = np.array(s_idx)
-                e_idx = np.array(e_idx)
-
-                idx_sort = np.argsort(-scores)[0:top_n]
-                pred_s.append(s_idx[idx_sort])
-                pred_e.append(e_idx[idx_sort])
-                pred_score.append(scores[idx_sort])
-        return pred_s, pred_e, pred_score
+        return score_s, score_e
 
     # --------------------------------------------------------------------------
     # Saving and loading
@@ -449,9 +350,9 @@ class DocReader(object):
             filename, map_location=lambda storage, loc: storage
         )
         word_dict = saved_params['word_dict']
-        char_dict = saved_params['char_dict']
         feature_dict = saved_params['feature_dict']
         state_dict = saved_params['state_dict']
+        char_dict = saved_params['char_dict']
         args = saved_params['args']
         if new_args:
             args = override_model_args(args, new_args)

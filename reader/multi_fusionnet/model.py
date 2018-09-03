@@ -30,24 +30,41 @@ class DocReader(object):
     # Initialization
     # --------------------------------------------------------------------------
 
-    def __init__(self, args, word_dict, char_dict,feature_dict,
+    def __init__(self, args, all_dicts=None,
                  state_dict=None, normalize=True):
         # Book-keeping.
         self.args = args
-        self.word_dict = word_dict
-        self.char_dict = char_dict
-        self.args.vocab_size = len(word_dict)
-        self.args.char_vocab_size = len(char_dict)
-        self.feature_dict = feature_dict
-        self.args.num_features = len(feature_dict)
+        self.all_dicts = all_dicts
+        self.word_dict = all_dicts['word_dict']
+        self.char_dict = all_dicts['char_dict']
+        self.pos_dict = all_dicts['pos_dict']
+        self.ner_dict = all_dicts['ner_dict']
+        self.feature_dict = all_dicts['feature_dict']
+
+        self.args.vocab_size = len(self.word_dict)
+        self.args.char_vocab_size = len(self.char_dict)
+        self.args.pos_vocab_size = len(self.pos_dict)
+        self.args.ner_vocab_size = len(self.ner_dict)
+        self.args.num_features = len(self.feature_dict)
+
         self.updates = 0
         self.use_cuda = False
         self.parallel = False
+
+        def get_n_params(model):
+            pp=0
+            for p in list(model.parameters()):
+                nn=1
+                for s in list(p.size()):
+                    nn = nn*s
+                pp += nn
+            return pp
 
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
             self.network = RnnDocReader(args, normalize)
+            print( get_n_params(self.network) )
         else:
             raise RuntimeError('Unsupported model: %s' % args.model_type)
 
@@ -201,28 +218,24 @@ class DocReader(object):
         # Transfer to GPU
         if self.use_cuda:
             inputs = [e if e is None else Variable(e.cuda(async=True))
-                      for e in ex[:6]]
-            target_s = Variable(ex[6].cuda(async=True))
-            target_e = Variable(ex[7].cuda(async=True))
+                      for e in ex[:11]]
+            target_s = Variable(ex[11].cuda(async=True))
+            target_e = Variable(ex[12].cuda(async=True))
         else:
-            inputs = [e if e is None else Variable(e) for e in ex[:5]]
-            target_s = Variable(ex[6])
-            target_e = Variable(ex[7])
+            inputs = [e if e is None else Variable(e) for e in ex[:11]]
+            target_s = Variable(ex[11])
+            target_e = Variable(ex[12])
 
         # Run forward
         score_s, score_e = self.network(*inputs)
         # Compute loss and accuracies
 
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        #loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        loss = F.binary_cross_entropy(score_s, target_s) + F.binary_cross_entropy(score_e, target_e)
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()
         loss.backward()
-        #for name, param in self.network.named_parameters():
-        #    if param.requires_grad:
-        #        print("-"*40,name,"-"*40)
-        #        print(torch.sum(param.grad))
-        #        print(torch.sum(torch.abs(param.grad)))
         # Clip gradients
         torch.nn.utils.clip_grad_norm(self.network.parameters(),
                                       self.args.grad_clipping)
@@ -233,8 +246,8 @@ class DocReader(object):
 
         # Reset any partially fixed parameters (e.g. rare words)
         self.reset_parameters()
-
-        return loss.data[0].item(), ex[0].size(0)
+        lossval = loss.data.item()
+        return lossval, ex[0].size(0)
 
     def reset_parameters(self):
         """Reset any partially fixed parameters to original states."""
@@ -280,39 +293,19 @@ class DocReader(object):
         # Transfer to GPU
         if self.use_cuda:
             inputs = [e if e is None else
-                      Variable(e.cuda(async=True), volatile=True)
-                      for e in ex[:6]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
-            target_s = torch.LongTensor(gt_s).cuda()
-            target_e = torch.LongTensor(gt_e).cuda()
+                      Variable(e.cuda(async=True))
+                      for e in ex[:11]]
         else:
-            inputs = [e if e is None else Variable(e, volatile=True)
-                      for e in ex[:6]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
-            target_s = torch.LongTensor(gt_s)
-            target_e = torch.LongTensor(gt_e)
+            inputs = [e if e is None else Variable(e)
+                      for e in ex[:11]]
 
         # Run forward
         score_s, score_e = self.network(*inputs)
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
 
         # Decode predictions
         score_s = score_s.data.cpu()
         score_e = score_e.data.cpu()
-        if candidates:
-            args = (score_s, score_e, candidates, top_n, self.args.max_len)
-            if async_pool:
-                return async_pool.apply_async(self.decode_candidates, args)
-            else:
-                return self.decode_candidates(*args)
-        else:
-            args = (score_s, score_e, top_n, self.args.max_len)
-            if async_pool:
-                return async_pool.apply_async(self.decode, args)
-            else:
-                return self.decode(*args), loss.item()
+        return score_s, score_e
 
     @staticmethod
     def decode(score_s, score_e, top_n=1, max_len=None):
@@ -414,9 +407,7 @@ class DocReader(object):
             state_dict.pop('fixed_embedding')
         params = {
             'state_dict': state_dict,
-            'word_dict': self.word_dict,
-            'char_dict': self.char_dict,
-            'feature_dict': self.feature_dict,
+            'all_dicts': self.all_dicts,
             'args': self.args,
         }
         try:
@@ -431,8 +422,7 @@ class DocReader(object):
             network = self.network
         params = {
             'state_dict': network.state_dict(),
-            'word_dict': self.word_dict,
-            'feature_dict': self.feature_dict,
+            'all_dicts': self.all_dicts,
             'args': self.args,
             'epoch': epoch,
             'optimizer': self.optimizer.state_dict(),
@@ -448,14 +438,13 @@ class DocReader(object):
         saved_params = torch.load(
             filename, map_location=lambda storage, loc: storage
         )
-        word_dict = saved_params['word_dict']
-        char_dict = saved_params['char_dict']
-        feature_dict = saved_params['feature_dict']
+        print(saved_params.keys())
+        all_dicts = saved_params['all_dicts']
         state_dict = saved_params['state_dict']
         args = saved_params['args']
         if new_args:
             args = override_model_args(args, new_args)
-        return DocReader(args, word_dict, char_dict, feature_dict, state_dict, normalize)
+        return DocReader(args, all_dicts=all_dicts, state_dict=state_dict, normalize=normalize)
 
     @staticmethod
     def load_checkpoint(filename, normalize=True):
@@ -463,14 +452,12 @@ class DocReader(object):
         saved_params = torch.load(
             filename, map_location=lambda storage, loc: storage
         )
-        word_dict = saved_params['word_dict']
-        char_dict = saved_params['char_dict']
-        feature_dict = saved_params['feature_dict']
+        all_dicts = saved_params['all_dicts']
         state_dict = saved_params['state_dict']
         epoch = saved_params['epoch']
         optimizer = saved_params['optimizer']
         args = saved_params['args']
-        model = DocReader(args, word_dict, char_dict, feature_dict, state_dict, normalize)
+        model = DocReader(args, all_dicts=all_dicts, state_dict=state_dict, normalize=normalize)
         model.init_optimizer(optimizer)
         return model, epoch
 

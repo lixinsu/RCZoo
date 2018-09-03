@@ -23,6 +23,7 @@ class RnnDocReader(nn.Module):
     RNN_TYPES = {'lstm': nn.LSTM, 'gru': nn.GRU, 'rnn': nn.RNN}
 
     def __init__(self, args, normalize=True):
+
         super(RnnDocReader, self).__init__()
         # Store config
         self.args = args
@@ -30,8 +31,8 @@ class RnnDocReader(nn.Module):
         self.char_embedding = nn.Embedding(args.char_vocab_size,
                                            50,
                                            padding_idx=0)
-        self.pos_embedding = nn.Embedding(args.pos_vocab_size, 12, padding_idx=0)
-        self.ner_embedding = nn.Embedding(args.ner_vocab_size, 8, padding_idx=0)
+        self.pos_embedding = nn.Embedding(args.pos_vocab_size, 50, padding_idx=0)
+        self.ner_embedding = nn.Embedding(args.ner_vocab_size, 20, padding_idx=0)
         args.char_emb = 50
         self.emb_rnn = nn.GRU(args.char_emb,
                               args.char_emb,
@@ -48,8 +49,8 @@ class RnnDocReader(nn.Module):
         # Input size to RNN: word emb + question emb + manual features
         # RNN document encoder
 
-        pdim = args.embedding_dim * 2 + 50 * 2 + 12 + 8
-        qdim = args.embedding_dim + 50 * 2 + 12 + 8
+        pdim = args.embedding_dim * 2 + 50 * 2 + 50 + 20
+        qdim = args.embedding_dim + 50 * 2 + 50  + 20
 
         #self.emb_hw = layers.Highway( 2, dim, gate_bias=-2)
 
@@ -57,8 +58,8 @@ class RnnDocReader(nn.Module):
             input_size=pdim,
             hidden_size=128,
             num_layers=2,
-            dropout_rate=0.2,
-            dropout_output=True,
+            dropout_rate=0,
+            dropout_output=False,
             concat_layers=True,
             rnn_type=nn.GRU,
             padding=True,
@@ -68,8 +69,8 @@ class RnnDocReader(nn.Module):
             input_size=qdim,
             hidden_size=128,
             num_layers=2,
-            dropout_rate=0.2,
-            dropout_output=True,
+            dropout_rate=0,
+            dropout_output=False,
             concat_layers=True,
             rnn_type=nn.GRU,
             padding=True,
@@ -140,7 +141,8 @@ class RnnDocReader(nn.Module):
             x2_c = question char indices           [batch * len_q * word_len]
             x2_mask = question padding mask        [batch * len_q]
         """
-        # Embed char of doc and question
+
+       # Embed char of doc and question
         b, sl, wl = x1_c.size()
         x1_c_emb = self.char_embedding(x1_c.view(b * sl, wl))
         _ , x1_c_emb = self.emb_rnn(x1_c_emb)
@@ -181,12 +183,20 @@ class RnnDocReader(nn.Module):
         x1_h = self.enc_rnn_p(x1, x1_mask)
         x2_h = self.enc_rnn_q(x2, x2_mask)
 
+        x1_h = layers.dropout( x1_h, p=0.2, training=self.training)
+        x2_h = layers.dropout( x2_h, p=0.2, training=self.training)
+
         # preprocess
         x2_u = self.enc_rnn_qu(x2_h, x2_mask)
+        x2_u = layers.dropout(x2_u, p=0.2, training=self.training)
 
         # inter-attention
         x1_HoW = torch.cat([x1_emb, x1_c_emb, x1_h], dim=2)
         x2_HoW = torch.cat([x2_emb, x2_c_emb, x2_h], dim=2)
+        # dropout
+        x1_HoW = layers.dropout(x1_HoW, p=0.2, training=self.training)
+        x2_HoW = layers.dropout(x2_HoW, p=0.2, training=self.training)
+
         x2_value = torch.cat([x2_h, x2_u], dim=2)
         x1_attn = self.full_attn(x1_HoW, x2_HoW, x2_value, x2_mask)
 
@@ -204,4 +214,3 @@ class RnnDocReader(nn.Module):
         end_scores = self.end_attn(x1_u, x2_vec, x1_mask)
 
         return start_scores, end_scores
-

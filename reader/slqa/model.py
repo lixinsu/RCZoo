@@ -60,7 +60,6 @@ class DocReader(object):
             raise RuntimeError('Unsupported model: %s' % args.model_type)
 
         # Load saved state
-        print(type(state_dict))
         if state_dict:
             # Load buffer separately
             self.network.load_state_dict(state_dict)

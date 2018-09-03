@@ -14,6 +14,7 @@ import logging
 import json
 
 from tqdm import tqdm
+from reader.multi_fusionnet import Predictor
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -23,8 +24,6 @@ console.setFormatter(fmt)
 logger.addHandler(console)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('modeltype', type=str, default=None,
-                    help='model type')
 parser.add_argument('dataset', type=str, default=None,
                     help='SQuAD-like dataset to evaluate on')
 parser.add_argument('--model', type=str, default=None,
@@ -59,20 +58,6 @@ if args.cuda:
     logger.info('CUDA enabled (GPU %d)' % args.gpu)
 else:
     logger.info('Running on CPU only.')
-
-if args.modeltype == 'docqa':
-    from reader.docqa import Predictor
-elif args.modeltype == 'drqa':
-    from reader.drqa import Predictor
-elif args.modeltype == 'bidaf':
-    from reader.bidafv1 import Predictor
-elif args.modeltype == 'slqa':
-    from reader.slqa import Predictor
-elif args.modeltype == 'fusionnet':
-    from reader.fusionnet import Predictor
-elif args.modeltype == 'rnet':
-    from reader.rnet import Predictor
-
 
 predictor = Predictor(
     model=args.model,
@@ -116,12 +101,8 @@ for i in tqdm(range(0, len(examples), args.batch_size)):
     )
     for j in range(len(predictions)):
         # Official eval expects just a qid --> span
-        if args.official:
-            results[qids[i + j]] = predictions[j][0][0]
+        results[qids[i + j]] = predictions[j]
 
-        # Otherwise we store top N and scores for debugging.
-        else:
-            results[qids[i + j]] = [(p[0], float(p[1])) for p in predictions[j]]
 
 model = os.path.splitext(os.path.basename(args.model or 'default'))[0]
 basename = os.path.splitext(os.path.basename(args.dataset))[0]

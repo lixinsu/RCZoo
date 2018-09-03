@@ -15,6 +15,7 @@ import json
 
 from tqdm import tqdm
 
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 fmt = logging.Formatter('%(asctime)s: [ %(message)s ]', '%m/%d/%Y %I:%M:%S %p')
@@ -23,8 +24,6 @@ console.setFormatter(fmt)
 logger.addHandler(console)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('modeltype', type=str, default=None,
-                    help='model type')
 parser.add_argument('dataset', type=str, default=None,
                     help='SQuAD-like dataset to evaluate on')
 parser.add_argument('--model', type=str, default=None,
@@ -60,24 +59,15 @@ if args.cuda:
 else:
     logger.info('Running on CPU only.')
 
-if args.modeltype == 'docqa':
-    from reader.docqa import Predictor
-elif args.modeltype == 'drqa':
-    from reader.drqa import Predictor
-elif args.modeltype == 'bidaf':
-    from reader.bidafv1 import Predictor
-elif args.modeltype == 'slqa':
-    from reader.slqa import Predictor
-elif args.modeltype == 'fusionnet':
-    from reader.fusionnet import Predictor
-elif args.modeltype == 'rnet':
-    from reader.rnet import Predictor
-
+if args.model == 'fusionnet':
+    from reader.multi_fusionnet import Predictor
+elif args.model == 'docqa':
+    from reader.multi_docqa import Predictor
 
 predictor = Predictor(
     model=args.model,
     tokenizer=args.tokenizer,
-    embedding_file=args.embedding_file,
+   embedding_file=args.embedding_file,
     num_workers=args.num_workers,
 )
 if args.cuda:
@@ -116,12 +106,8 @@ for i in tqdm(range(0, len(examples), args.batch_size)):
     )
     for j in range(len(predictions)):
         # Official eval expects just a qid --> span
-        if args.official:
-            results[qids[i + j]] = predictions[j][0][0]
+        results[qids[i + j]] = predictions[j]
 
-        # Otherwise we store top N and scores for debugging.
-        else:
-            results[qids[i + j]] = [(p[0], float(p[1])) for p in predictions[j]]
 
 model = os.path.splitext(os.path.basename(args.model or 'default'))[0]
 basename = os.path.splitext(os.path.basename(args.dataset))[0]
