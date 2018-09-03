@@ -355,7 +355,7 @@ class SeqAttnMatch(nn.Module):
         return matched_seq
 
 
-class BilinearSeqAttn(nn.Module):
+class BilinearAnswer(nn.Module):
     """A bilinear attention layer over a sequence X w.r.t y:
 
     * o_i = softmax(x_i'Wy) for x_i in X.
@@ -363,15 +363,10 @@ class BilinearSeqAttn(nn.Module):
     Optionally don't normalize output weights.
     """
 
-    def __init__(self, x_size, y_size, identity=False, normalize=True):
-        super(BilinearSeqAttn, self).__init__()
-        self.normalize = normalize
-
-        # If identity is true, we just use a dot product without transformation.
-        if not identity:
-            self.linear = nn.Linear(y_size, x_size)
-        else:
-            self.linear = None
+    def __init__(self, x_size, y_size):
+        super(BilinearAnswer, self).__init__()
+        self.linear1 = nn.Linear(x_size, 256)
+        self.linear2 = nn.Linear(y_size, 256)
 
     def forward(self, x, y, x_mask):
         """
@@ -382,19 +377,11 @@ class BilinearSeqAttn(nn.Module):
         Output:
             alpha = batch * len
         """
-        Wy = self.linear(y) if self.linear is not None else y
-        xWy = x.bmm(Wy.unsqueeze(2)).squeeze(2)
+        Wy = F.tanh(self.linear1(y))
+        Wx = F.tanh(self.linear2(x))
+        xWy = Wx.bmm(Wy.unsqueeze(2)).squeeze(2)
         xWy.data.masked_fill_(x_mask.data, -float('inf'))
-        if self.normalize:
-            if self.training:
-                # In training we output log-softmax for NLL
-                alpha = F.log_softmax(xWy, dim=-1)
-            else:
-                # ...Otherwise 0-1 probabilities
-                alpha = F.softmax(xWy, dim=-1)
-        else:
-            alpha = xWy.exp()
-        return alpha
+        return xWy
 
 
 class PtrNet(nn.Module):
@@ -441,178 +428,10 @@ class LinearSeqAttn(nn.Module):
         Output:
             alpha: batch * len
         """
-        scores = self.linear2(F.tanh(self.linear1(x))).squeeze(2)
+        scores = self.linear2(F.relu(self.linear1(x))).squeeze(2)
         scores.data.masked_fill_(x_mask.data, -float('inf'))
         alpha = F.softmax(scores)
         res = alpha.unsqueeze(1).bmm(x).squeeze(1)
         return res
 
-
-# ------------------------------------------------------------------------------
-# Functional
-# ------------------------------------------------------------------------------
-
-
-def uniform_weights(x, x_mask):
-    """Return uniform weights over non-masked x (a sequence of vectors).
-
-    Args:
-        x: batch * len * hdim
-        x_mask: batch * len (1 for padding, 0 for true)
-    Output:
-        x_avg: batch * hdim
-    """
-    alpha = Variable(torch.ones(x.size(0), x.size(1)))
-    if x.data.is_cuda:
-        alpha = alpha.cuda()
-    alpha = alpha * x_mask.eq(0).float()
-    alpha = alpha / alpha.sum(1).expand(alpha.size())
-    return alpha
-
-
-def weighted_avg(x, weights):
-    """Return a weighted average of x (a sequence of vectors).
-
-    Args:
-        x: batch * len * hdim
-        weights: batch * len, sum(dim = 1) = 1
-    Output:
-        x_avg: batch * hdim
-    """
-    return weights.unsqueeze(1).bmm(x).squeeze(1)
-
-
-class MultiheadAttention(nn.Module):
-    """Multi-headed attention.
-    See "Attention Is All You Need" for more details.
-    """
-    def __init__(self, embed_dim, num_heads, dropout=0., bias=True):
-        super().__init__()
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.dropout = dropout
-        self.head_dim = embed_dim // num_heads
-        assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
-        self.scaling = self.head_dim**-0.5
-        self._mask = None
-
-        self.in_proj_weight = Parameter(torch.Tensor(3*embed_dim, embed_dim))
-        if bias:
-            self.in_proj_bias = Parameter(torch.Tensor(3*embed_dim))
-        else:
-            self.register_parameter('in_proj_bias', None)
-        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.xavier_uniform_(self.in_proj_weight)
-        nn.init.xavier_uniform_(self.out_proj.weight)
-        if self.in_proj_bias is not None:
-            nn.init.constant_(self.in_proj_bias, 0.)
-            nn.init.constant_(self.out_proj.bias, 0.)
-
-    def forward(self, query, key, value,
-                key_padding_mask=None,
-                need_weights=True):
-        """Input shape: Time x Batch x Channel
-        Self-attention can be implemented by passing in the same arguments for
-        query, key and value. Future timesteps can be masked with the
-        `mask_future_timesteps` argument. Padding elements can be excluded from
-        the key by passing a binary ByteTensor (`key_padding_mask`) with shape:
-        batch x src_len, where padding elements are indicated by 1s.
-        """
-
-        qkv_same = query.data_ptr() == key.data_ptr() == value.data_ptr()
-        kv_same = key.data_ptr() == value.data_ptr()
-
-        tgt_len, bsz, embed_dim = query.size()
-        assert embed_dim == self.embed_dim
-        assert list(query.size()) == [tgt_len, bsz, embed_dim]
-        assert key.size() == value.size()
-
-        if qkv_same:
-            # self-attention
-            q, k, v = self.in_proj_qkv(query)
-        elif kv_same:
-            # encoder-decoder attention
-            q = self.in_proj_q(query)
-            if key is None:
-                assert value is None
-                # this will allow us to concat it with previous value and get
-                # just get the previous value
-                k = v = q.new(0)
-            else:
-                k, v = self.in_proj_kv(key)
-        else:
-            q = self.in_proj_q(query)
-            k = self.in_proj_k(key)
-            v = self.in_proj_v(value)
-        q *= self.scaling
-
-        src_len = k.size(0)
-
-        if key_padding_mask is not None:
-            assert key_padding_mask.size(0) == bsz
-            assert key_padding_mask.size(1) == src_len
-
-        q = q.contiguous().view(tgt_len, bsz*self.num_heads, self.head_dim).transpose(0, 1)
-        k = k.contiguous().view(src_len, bsz*self.num_heads, self.head_dim).transpose(0, 1)
-        v = v.contiguous().view(src_len, bsz*self.num_heads, self.head_dim).transpose(0, 1)
-
-        attn_weights = torch.bmm(q, k.transpose(1, 2))
-        assert list(attn_weights.size()) == [bsz * self.num_heads, tgt_len, src_len]
-
-        if key_padding_mask is not None:
-            # don't attend to padding symbols
-            attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = attn_weights.float().masked_fill(
-                key_padding_mask.unsqueeze(1).unsqueeze(2),
-                float('-inf'),
-            ).type_as(attn_weights)  # FP16 support: cast to float and back
-            attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
-        attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(attn_weights)
-        attn_weights = F.dropout(attn_weights, p=self.dropout, training=self.training)
-
-        attn = torch.bmm(attn_weights, v)
-        assert list(attn.size()) == [bsz * self.num_heads, tgt_len, self.head_dim]
-        attn = attn.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
-        attn = self.out_proj(attn)
-
-        if need_weights:
-            # average attention weights over heads
-            attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = attn_weights.sum(dim=1) / self.num_heads
-        else:
-            attn_weights = None
-
-        return attn, attn_weights
-
-    def in_proj_qkv(self, query):
-        return self._in_proj(query).chunk(3, dim=-1)
-
-    def in_proj_kv(self, key):
-        return self._in_proj(key, start=self.embed_dim).chunk(2, dim=-1)
-
-    def in_proj_q(self, query):
-        return self._in_proj(query, end=self.embed_dim)
-
-    def in_proj_k(self, key):
-        return self._in_proj(key, start=self.embed_dim, end=2*self.embed_dim)
-
-    def in_proj_v(self, value):
-        return self._in_proj(value, start=2*self.embed_dim)
-
-    def _in_proj(self, input, start=None, end=None):
-        weight = self.in_proj_weight
-        bias = self.in_proj_bias
-        if end is not None:
-            weight = weight[:end, :]
-            if bias is not None:
-                bias = bias[:end]
-        if start is not None:
-            weight = weight[start:, :]
-            if bias is not None:
-                bias = bias[start:]
-        return F.linear(input, weight, bias)
 

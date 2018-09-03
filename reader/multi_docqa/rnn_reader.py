@@ -31,6 +31,7 @@ class RnnDocReader(nn.Module):
         self.char_embedding = nn.Embedding(args.char_vocab_size,
                                            50,
                                            padding_idx=0)
+
         self.emb_rnn = nn.GRU(args.char_emb,
                               args.char_emb,
                               batch_first=True,
@@ -79,38 +80,23 @@ class RnnDocReader(nn.Module):
         self.linear_self = nn.Linear(64*4, 64*4)
         self.relu_self = nn.ReLU()
 
+        self.self_attn = layers.LinearSeqAttn(64*4)
+
         self.fusion_rnn1 = layers.StackedBRNN(
                     input_size=64*4,
-                    hidden_size=128,
+                    hidden_size=64,
                     num_layers=2,
                     dropout_rate=0.2,
                     dropout_output=True,
-                    concat_layers=False,
+                    concat_layers=True,
                     rnn_type=nn.GRU,
                     padding=True,
-                )
-        self.start = nn.Sequential(
-                    nn.Linear(64*4+128*2, 64),
-                    nn.ReLU(),
-                    nn.Linear(64, 1)
-                )
+         )
 
-        self.fusion_rnn2 = layers.StackedBRNN(
-                    input_size=128*2*3 + 64*4,
-                    hidden_size=128,
-                    num_layers=1,
-                    dropout_rate=0.2,
-                    dropout_output=True,
-                    concat_layers=False,
-                    rnn_type=nn.GRU,
-                    padding=True,
-                )
+        self.start_attn = layers.BilinearAnswer(64*4, 64*4)
+        self.end_attn = layers.BilinearAnswer(64*4, 64*4)
 
-        self.end = nn.Sequential(
-                nn.Linear(128*2+64*4, 64),
-                nn.ReLU(),
-                nn.Linear(64, 1)
-                )
+
 
     def forward(self, x1, x1_c, x1_mask, x2, x2_c, x2_mask):
         """Inputs:
@@ -163,56 +149,16 @@ class RnnDocReader(nn.Module):
 
         c_fusion = self.relu_attn(c_fusion)
 
-        #c_fusion_enc = self.cq_rnn( c_fusion, x1_mask)
-
-        # self attention in residual net
-        #self_attn = self.cc_attn(c_fusion_enc, c_fusion_enc, x1_mask)
-
-        #self_attn = self.linear_self(self_attn)
-
-        #self_attn = self.relu_self(self_attn)
-
-        #c_fusion = c_fusion + self_attn
-        # version 2
-        c_fusion = c_fusion
-
         # bxnx(128*2)
         g1 = self.fusion_rnn1(c_fusion, x1_mask)
 
-        # input: bxnx(64*4+128*2)
-        start_logits = self.start( torch.cat([c_fusion, g1], dim=2) ).squeeze(2)
 
-        start_logits.data.masked_fill_(x1_mask.data, -2e20)
+        q_vec = self.self_attn(x2_pro, x2_mask)
 
-        # bxn
-        softmax_start = F.sigmoid(start_logits)
-
-
-        # bx(128*2)
-        a1 = softmax_start.unsqueeze(1).bmm(g1).expand(-1, g1.size(1) ,-1)
-
-        # [p0, g1, a1i, g1 * a1i]  bxnx(128*2*3 + 64*4*4)
-        re_fusion = torch.cat( [c_fusion, g1, a1, g1 * a1] ,dim=2)
-
-        g2 = self.fusion_rnn2(re_fusion, x1_mask)
-
-        # input : bxnx(128*2+64*4*4)
-        end_logits = self.end(torch.cat([g2, c_fusion], dim=2)).squeeze(2)
-
-        end_logits.data.masked_fill_(x1_mask.data, -2e20)
-
-        #softmax_end = F.softmax(end_logits, dim=1)
-        softmax_end = F.sigmoid(end_logits)
-
-        #if self.training:
-        #    start_scores = torch.log(softmax_start + 1e-20)
-        #    end_scores = torch.log(softmax_end + 1e-20)
-        #else:
-        #    start_scores = softmax_start
-        #    end_scores = softmax_end
-
-        start_scores = softmax_start
-        end_scores = softmax_end
+        start_scores = self.start_attn(g1, q_vec, x1_mask)
+        end_scores = self.end_attn(g1, q_vec, x1_mask)
+        start_scores = F.sigmoid(start_scores)
+        end_scores = F.sigmoid(end_scores)
 
         return start_scores, end_scores
 

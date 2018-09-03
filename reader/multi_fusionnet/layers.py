@@ -341,6 +341,45 @@ class MTLSTM(nn.Module):
 
         return output1, output2
 
+
+
+class AnswerComponent(nn.Module):
+    """ DMN answer component
+
+    """
+
+    def __init__(self, d):
+        super(AnswerComponent, self).__init__()
+        self.linear_x1 = nn.Linear(d, d)
+        self.linear_y1 = nn.Linear(d, d)
+        self.linear_fusion1 = nn.Linear(4 * d, d)
+        self.linear_x2 = nn.Linear(d, d)
+        self.linear_y2 = nn.Linear(d, d)
+
+    def forward(self, x, y, x_mask):
+        """
+        Args:
+            x: batch * len * d
+            y: batch * d
+            x_mask: batch * len(1 for padding)
+        Output:
+            alpha = batch * len
+        """
+        m1 = x.bmm( y.unsqueeze(2) ).squeeze(2)
+        m1.data.masked_fill_(x_mask.data, -float("inf"))
+        m1 = F.sigmoid(m1)
+        v1 = m1.unsqueeze(1).bmm(x).squeeze(1)
+        y1 = self.linear_fusion1(torch.cat([v1, y, v1-y, v1*y], dim=1))
+
+        m2 = x.bmm( y1.unsqueeze(2) ).squeeze(2)
+        m2.data.masked_fill_(x_mask.data, -float("inf"))
+        m2 = F.sigmoid(m2)
+        #Wy = y
+        #xWy = x.bmm(Wy.unsqueeze(2)).squeeze(2)
+        #xWy.data.masked_fill_(x_mask.data, -float('inf'))
+        #alpha = F.sigmoid(xWy)
+        return m2
+
 # Attention layer
 class FullAttention(nn.Module):
     """
@@ -480,6 +519,10 @@ class BilinearSeqAttn(nn.Module):
     def __init__(self, hidden_size):
         super(BilinearSeqAttn, self).__init__()
         self.linear = nn.Linear(hidden_size, hidden_size)
+        self.linear0 = nn.Linear(hidden_size, hidden_size)
+        self.linear1 = nn.Linear(2 * hidden_size, hidden_size)
+        self.relu1 = nn.ReLU()
+        self.linear2 = nn.Linear(hidden_size, 1)
 
     def forward(self, x, y, x_mask):
         """
@@ -490,10 +533,20 @@ class BilinearSeqAttn(nn.Module):
         Output:
             alpha = batch * len
         """
-        Wy = self.linear(y) if self.linear is not None else y
-        xWy = x.bmm(Wy.unsqueeze(2)).squeeze(2)
-        xWy.data.masked_fill_(x_mask.data, -float('inf'))
-        alpha = F.sigmoid(xWy)
+        # Bilinear function
+       # Wy = self.linear(y) if self.linear is not None else y
+       # xWy = x.bmm(Wy.unsqueeze(2)).squeeze(2)
+       # xWy.data.masked_fill_(x_mask.data, -float('inf'))
+       # alpha = F.sigmoid(xWy)
+        # FC function
+        Wy = self.linear0(y) # batch * hdim1
+        P = torch.cat([x,Wy.unsqueeze(1).expand_as(x)], dim=2)
+        P = self.linear1(P)
+        P = self.relu1(P)
+        P = self.linear2(P)
+        logits = P.squeeze(2)
+        alpha = F.sigmoid(logits)
+        alpha.data.masked_fill_(x_mask.data, 0)
         return alpha
 
 

@@ -14,7 +14,7 @@ import logging
 import json
 
 from tqdm import tqdm
-from reader.multi_docqa import Predictor
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -59,10 +59,15 @@ if args.cuda:
 else:
     logger.info('Running on CPU only.')
 
+if args.model == 'fusionnet':
+    from reader.multi_fusionnet import Predictor
+elif args.model == 'docqa':
+    from reader.multi_docqa import Predictor
+
 predictor = Predictor(
     model=args.model,
     tokenizer=args.tokenizer,
-    embedding_file=args.embedding_file,
+   embedding_file=args.embedding_file,
     num_workers=args.num_workers,
 )
 if args.cuda:
