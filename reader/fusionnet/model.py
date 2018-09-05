@@ -30,19 +30,27 @@ class DocReader(object):
     # Initialization
     # --------------------------------------------------------------------------
 
-    def __init__(self, args, word_dict, char_dict,feature_dict,
+    def __init__(self, args, all_dicts=None,
                  state_dict=None, normalize=True):
         # Book-keeping.
         self.args = args
-        self.word_dict = word_dict
-        self.char_dict = char_dict
-        self.args.vocab_size = len(word_dict)
-        self.args.char_vocab_size = len(char_dict)
-        self.feature_dict = feature_dict
+        self.all_dicts = all_dicts
+        self.word_dict = all_dicts['word_dict']
+        self.char_dict = all_dicts['char_dict']
+        self.pos_dict = all_dicts['pos_dict']
+        self.ner_dict = all_dicts['ner_dicts']
+        self.feature_dict = all_dicts['feature_dict']
+
+        self.args.vocab_size = len(self.word_dict)
+        self.args.char_vocab_size = len(self.char_dict)
+        self.args.pos_vocab_size = len(self.pos_dict)
+        self.args.ner_vocab_size = len(self.ner_dict)
         self.args.num_features = len(feature_dict)
+
         self.updates = 0
         self.use_cuda = False
         self.parallel = False
+
         def get_n_params(model):
             pp=0
             for p in list(model.parameters()):
@@ -51,6 +59,7 @@ class DocReader(object):
                     nn = nn*s
                 pp += nn
             return pp
+
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
@@ -60,7 +69,6 @@ class DocReader(object):
             raise RuntimeError('Unsupported model: %s' % args.model_type)
 
         # Load saved state
-        print(type(state_dict))
         if state_dict:
             # Load buffer separately
             self.network.load_state_dict(state_dict)
@@ -210,13 +218,13 @@ class DocReader(object):
         # Transfer to GPU
         if self.use_cuda:
             inputs = [e if e is None else Variable(e.cuda(async=True))
-                      for e in ex[:6]]
-            target_s = Variable(ex[6].cuda(async=True))
-            target_e = Variable(ex[7].cuda(async=True))
+                      for e in ex[:11]]
+            target_s = Variable(ex[11].cuda(async=True))
+            target_e = Variable(ex[12].cuda(async=True))
         else:
-            inputs = [e if e is None else Variable(e) for e in ex[:5]]
-            target_s = Variable(ex[6])
-            target_e = Variable(ex[7])
+            inputs = [e if e is None else Variable(e) for e in ex[:11]]
+            target_s = Variable(ex[11])
+            target_e = Variable(ex[12])
 
         # Run forward
         score_s, score_e = self.network(*inputs)
@@ -227,11 +235,6 @@ class DocReader(object):
         # Clear gradients and run backward
         self.optimizer.zero_grad()
         loss.backward()
-        #for name, param in self.network.named_parameters():
-        #    if param.requires_grad:
-        #        print("-"*40,name,"-"*40)
-        #        print(torch.sum(param.grad))
-        #        print(torch.sum(torch.abs(param.grad)))
         # Clip gradients
         torch.nn.utils.clip_grad_norm(self.network.parameters(),
                                       self.args.grad_clipping)
@@ -290,10 +293,10 @@ class DocReader(object):
         if self.use_cuda:
             inputs = [e if e is None else
                       Variable(e.cuda(async=True))
-                      for e in ex[:6]]
+                      for e in ex[:11]]
         else:
             inputs = [e if e is None else Variable(e)
-                      for e in ex[:6]]
+                      for e in ex[:11]]
 
         # Run forward
         with torch.no_grad():
@@ -415,9 +418,7 @@ class DocReader(object):
             state_dict.pop('fixed_embedding')
         params = {
             'state_dict': state_dict,
-            'word_dict': self.word_dict,
-            'char_dict': self.char_dict,
-            'feature_dict': self.feature_dict,
+            'all_dicts': self.all_dicts,
             'args': self.args,
         }
         try:
@@ -432,8 +433,7 @@ class DocReader(object):
             network = self.network
         params = {
             'state_dict': network.state_dict(),
-            'word_dict': self.word_dict,
-            'feature_dict': self.feature_dict,
+            'all_dicts': self.all_dicts,
             'args': self.args,
             'epoch': epoch,
             'optimizer': self.optimizer.state_dict(),
@@ -449,14 +449,12 @@ class DocReader(object):
         saved_params = torch.load(
             filename, map_location=lambda storage, loc: storage
         )
-        word_dict = saved_params['word_dict']
-        feature_dict = saved_params['feature_dict']
+        all_dicts = saved_params['all_dicts']
         state_dict = saved_params['state_dict']
-        char_dict = saved_params['char_dict']
         args = saved_params['args']
         if new_args:
             args = override_model_args(args, new_args)
-        return DocReader(args, word_dict, char_dict, feature_dict, state_dict, normalize)
+        return DocReader(args, all_dicts=all_dicts, state_dict=state_dict, normalize=normalize)
 
     @staticmethod
     def load_checkpoint(filename, normalize=True):
@@ -464,14 +462,12 @@ class DocReader(object):
         saved_params = torch.load(
             filename, map_location=lambda storage, loc: storage
         )
-        word_dict = saved_params['word_dict']
-        char_dict = saved_params['char_dict']
-        feature_dict = saved_params['feature_dict']
+        all_dicts = saved_params['all_dicts']
         state_dict = saved_params['state_dict']
         epoch = saved_params['epoch']
         optimizer = saved_params['optimizer']
         args = saved_params['args']
-        model = DocReader(args, word_dict, char_dict, feature_dict, state_dict, normalize)
+        model = DocReader(args, all_dicts=all_dicts, state_dict=state_dict, normalize=normalize)
         model.init_optimizer(optimizer)
         return model, epoch
 

@@ -1,0 +1,207 @@
+[33mcommit 736137167286bcf3be4d4431e13c414f423c1df2[m
+Author: sulixin <sulixinict@gmail.com>
+Date:   Tue Sep 4 10:11:13 2018 +0800
+
+    modified the attention and dropout in QANet
+
+[33mcommit d27f267bc35b63a24a211a5b9e26d802cea67683[m
+Author: sulixin <sulixinict@gmail.com>
+Date:   Tue Sep 4 10:03:28 2018 +0800
+
+    modified the attention and dropout in QANet
+
+[33mcommit 38a95d5371ac6d6aadd5aec07fd94af25434d31f[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Wed Aug 15 08:28:50 2018 +0800
+
+    [feature]add fusion model and improve the SLQA
+
+[33mcommit 2a83b9a414a534f853226724ab0b362850db29c0[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Tue Aug 14 10:54:09 2018 +0800
+
+    [adjust]add tanh on the fusion layer for SLQA
+
+[33mcommit 9f3b748928a0b21cb61ff91bf3789473e9ecedc3[m
+Author: su <sulixinict@gmail.com>
+Date:   Tue Aug 14 08:23:25 2018 +0800
+
+    Update README.md
+
+[33mcommit fdee7a7ce918e6a9ee24d71d4364e04e9bed5836[m
+Merge: c444697 80eba8a
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:20:38 2018 +0800
+
+    Merge pull request #9 from lixinsu/master
+    
+    sync license
+
+[33mcommit 80eba8ae4540b12d6f2531edf7a1248345e73756[m
+Merge: 68c7776 b92a01b
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:18:15 2018 +0800
+
+    Merge pull request #8 from lixinsu/add-license-1
+    
+    Create LICENSE
+
+[33mcommit b92a01b76bac2a0fe28f81faee525ff582d3eed1[m
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:18:02 2018 +0800
+
+    Create LICENSE
+
+[33mcommit 68c7776620c330387a3d34365e80efb2e2fb4c6b[m
+Merge: 26e24c9 c444697
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:14:55 2018 +0800
+
+    Merge pull request #7 from lixinsu/dev
+    
+    [feature]add predict script for chn dataset
+
+[33mcommit c44469735e47b1421ebf37996ca9c53759b82c09[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:12:38 2018 +0800
+
+    [feature]add predict script for chn dataset
+
+[33mcommit 26e24c93a69ad667c6187f458db6435c16dcc32a[m
+Merge: f1fdba9 a61d5ed
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:11:20 2018 +0800
+
+    Merge pull request #6 from lixinsu/dev
+    
+    Dev
+
+[33mcommit a61d5ed0a4375a2eadc3f6cefd9838dd87e889d3[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:09:47 2018 +0800
+
+    [bugfix]fix import error
+
+[33mcommit fa1676e3e5517a2abef736a82e2841ca13656b4d[m
+Merge: 33a7781 f1fdba9
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:03:34 2018 +0800
+
+    Merge pull request #5 from lixinsu/master
+    
+    sync readme
+
+[33mcommit f1fdba930daed4a1b0c0362571f048148ce08872[m
+Merge: 393f950 33a7781
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 19:02:08 2018 +0800
+
+    Merge pull request #4 from lixinsu/dev
+    
+    [feature]supporting chinese, add slqa
+
+[33mcommit 33a7781bdc8bd077e00058ad0a35ce5fc87fb9c0[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Mon Aug 13 17:22:32 2018 +0800
+
+    [feature]supporting chinese, add slqa
+
+[33mcommit 393f9500730a62ce8e786cd43419066a04f789bb[m
+Merge: 82e9395 9a13907
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 18:53:19 2018 +0800
+
+    Merge pull request #3 from lixinsu/dev
+    
+    [feature]supporting chinese
+
+[33mcommit 9a13907000e8baff969ee0e4b2941002b02f63e4[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Mon Aug 13 17:22:32 2018 +0800
+
+    [feature]supporting chinese
+
+[33mcommit 82e93951c260bc042cf30400ab694de8b8abaf59[m
+Author: su <sulixinict@gmail.com>
+Date:   Mon Aug 13 11:29:08 2018 +0800
+
+    Update README.md
+
+[33mcommit 44e6ff97dfb2186dbe389b5d2ad761c96576a27e[m
+Merge: 1b260b1 4c21bb9
+Author: su <sulixinict@gmail.com>
+Date:   Thu Jul 26 16:05:34 2018 +0800
+
+    Merge pull request #2 from lixinsu/dev
+    
+    Dev
+
+[33mcommit 4c21bb945b62536371a8e969c4faf9a24fb4e9c2[m
+Merge: 114d5bc 1b260b1
+Author: su <sulixinict@gmail.com>
+Date:   Wed Jul 25 08:24:39 2018 +0800
+
+    Merge branch 'master' into dev
+
+[33mcommit 114d5bccd733875ac53cda86c5663662bcc06e32[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Wed Jul 25 08:22:07 2018 +0800
+
+    [doc]modify readme,add performance
+
+[33mcommit f877b4dd9b55cc2507e6f9955838e559e5727b5f[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Wed Jul 25 08:19:36 2018 +0800
+
+    [tune perf]docqa reach valid performance
+
+[33mcommit 1b260b1d3d2bd52e98a6b6bc3bb91e363fcb9031[m
+Author: su <sulixinict@gmail.com>
+Date:   Tue Jul 24 21:08:11 2018 +0800
+
+    Update README.md
+
+[33mcommit 05d4e38fc3d57109877a682d91f1ef43c929441a[m
+Merge: 32bcf3d 029d495
+Author: su <sulixinict@gmail.com>
+Date:   Tue Jul 24 14:50:31 2018 +0800
+
+    Merge pull request #1 from lixinsu/dev
+    
+    Update README.md
+
+[33mcommit 029d4952025f69619801dbb6bb78194ce73871b5[m
+Author: su <sulixinict@gmail.com>
+Date:   Tue Jul 24 14:50:15 2018 +0800
+
+    Update README.md
+
+[33mcommit 32bcf3d76b135eda01a2c5b125edeb9117ea104b[m
+Author: su <sulixinict@gmail.com>
+Date:   Tue Jul 24 14:49:42 2018 +0800
+
+    Update README.md
+
+[33mcommit cb9a03c08818935243169ad8cac8dbef885347e5[m
+Author: su <sulixinict@gmail.com>
+Date:   Tue Jul 24 14:45:21 2018 +0800
+
+    Update README.md
+
+[33mcommit 72baac51a85b893816e1ae98510f00f81a47ead0[m
+Author: su <sulixinict@gmail.com>
+Date:   Tue Jul 24 11:51:37 2018 +0800
+
+    Update README.md
+
+[33mcommit 85c6b03a822d1594ba4c03af7a6931d632259c29[m
+Author: lixinsu <sulixinict@gmail.com>
+Date:   Tue Jul 24 11:16:11 2018 +0800
+
+    [add feature]add five models
+
+[33mcommit 38f03fdebf7e094787636e5e0255f611a663ee2b[m
+Author: su <sulixinict@gmail.com>
+Date:   Tue Jul 24 11:14:18 2018 +0800
+
+    Initial commit

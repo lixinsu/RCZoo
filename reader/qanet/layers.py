@@ -55,15 +55,17 @@ class Highway(nn.Module):
         return x
 
 
-class Highway(nn.Module):
-    def __init__(self, layer_num: int, size: int, gate_bias=-2):
+class Projected_Highway(nn.Module):
+    def __init__(self, layer_num: int, input_size: int, size: int, gate_bias=-2):
         super().__init__()
         self.n = layer_num
+        self.projection = nn.Linear(input_size, size)
         self.linear = nn.ModuleList([nn.Linear(size, size) for _ in range(self.n)])
         self.gate = nn.ModuleList([nn.Linear(size, size) for _ in range(self.n)])
         #self.gate.bias.data.fill_(gate_bias)
 
     def forward(self, x):
+        x = self.projection(x)
         for i in range(self.n):
             gate = F.sigmoid(self.gate[i](x))
             nonlinear = F.relu(self.linear[i](x))
@@ -72,18 +74,20 @@ class Highway(nn.Module):
 
 
 class SeparableConv(nn.Module):
-    def __init__(self, nb_dim, nb_out, kernel_size):
+    def __init__(self, nb_dim, nb_out, kernel_size, dropout_rate):
         super().__init__()
         self.conv1 = nn.Conv1d(nb_dim, nb_dim, kernel_size, groups=nb_dim,
                                                             padding=kernel_size // 2, bias=True)
         self.conv2 = nn.Conv1d(nb_dim, nb_out, 1, groups=1, padding=0, bias=True)
+        self.dropout_rate = dropout_rate
+
 
     def forward(self,x):
         """
         :param x: shape(bsz, seqlen, 500)
         """
-
-        out = self.conv1(x.transpose(1,2))
+        inputs = x.transpose(1,2)
+        out = self.conv1(inputs)
         out = self.conv2(out)
         return out.transpose(1,2)
 
@@ -92,34 +96,108 @@ class Encoder(nn.Module):
     """
     encoder unit
     """
-    def __init__(self, nb_dim, nb_out):
+    def __init__(self, nb_dim, nb_out, dropout_rate):
         super().__init__()
-        self.posemb = SinusoidalPositionalEmbedding(nb_out, 0, False, init_size=1024)
-        self.sconv1 = SeparableConv(nb_dim, nb_out, 7)
-        self.sconv2 = SeparableConv(nb_out, nb_out, 7)
-        self.sconv3 = SeparableConv(nb_out, nb_out, 7)
-        self.sconv4 = SeparableConv(nb_out, nb_out, 7)
-        self.attn = MultiheadAttention(nb_out, 4, dropout=0.2)
+        self.posemb = SinusoidalPositionalEmbedding(nb_dim, 0, False, init_size=1024)
+        self.sconv1 = SeparableConv(nb_dim, nb_out, 7, dropout_rate)
+        self.sconv2 = SeparableConv(nb_out, nb_out, 7, dropout_rate)
+        self.sconv3 = SeparableConv(nb_out, nb_out, 7, dropout_rate)
+        self.sconv4 = SeparableConv(nb_out, nb_out, 7, dropout_rate)
+        self.attn = MultiheadAttention(nb_out, 4, dropout=dropout_rate)
         self.ffc = nn.Linear(nb_out, nb_out)
+        self.layer_norm1 = nn.LayerNorm(nb_dim)
+        self.layer_norm2 = nn.LayerNorm(nb_out)
+        self.layer_norm3 = nn.LayerNorm(nb_out)
+        self.layer_norm4 = nn.LayerNorm(nb_out)
+        self.layer_norm5 = nn.LayerNorm(nb_out)
+        self.dropout_rate = dropout_rate
+
 
     def forward(self,ori_x, x, x_mask):
         out0 = self.posemb(ori_x)
         x = out0 + x
+        x = self.layer_norm1(x)
+        x = F.dropout(x, self.dropout_rate, self.training)
         out = self.sconv1(x)
-        out =  out + x
+        out = layer_dropout(out, x, self.dropout_rate, self.training)
+        out = self.layer_norm2(out)
         out1 = self.sconv2(out)
-        out1 = out1 + out
-        out2 = self.sconv3(out1)
-        out2 = out2 + out1
-        out3 = self.sconv4(out2)
-        out3 = out3 + out2
-        out, _ = self.attn(out3.transpose(0,1), out3.transpose(0,1), out3.transpose(0,1), x_mask)
-        out = out.transpose(0,1)
-        out = out + out3
+        out = layer_dropout(out1, out, self.dropout_rate, self.training)
+        out = self.layer_norm3(out)
+        out = F.dropout(out, self.dropout_rate, self.training)
+        out2 = self.sconv3(out)
+        out = layer_dropout(out2, out, self.dropout_rate, self.training)
+        out = self.layer_norm4(out)
+        out3 = self.sconv4(out)
+        out = out3 + out
+        out = self.layer_norm5(out)
+        out = F.dropout(out, self.dropout_rate, self.training)
+        out_att, _ = self.attn(out.transpose(0, 1), out.transpose(0, 1), out.transpose(0, 1), x_mask)
+        out_att = out_att.transpose(0, 1)
+        out_att = layer_dropout(out_att, out, self.dropout_rate, self.training)
+        out = out_att + out3
         out1 = self.ffc(out)
-        out1 = out1 + out
+        out1 = layer_dropout(out1, out, self.dropout_rate, self.training)
+        out = out1 + out
         return out
 
+        # out0 = self.posemb(ori_x)
+        # x = out0 + x
+        # out = self.sconv1(x)
+        # out =  out + x
+        # out1 = self.sconv2(out)
+        # out1 = out1 + out
+        # out2 = self.sconv3(out1)
+        # out2 = out2 + out1
+        # out3 = self.sconv4(out2)
+        # out3 = out3 + out2
+        # out, _ = self.attn(out3.transpose(0,1), out3.transpose(0,1), out3.transpose(0,1), x_mask)
+        # out = out.transpose(0,1)
+        # out = out + out3
+        # out1 = self.ffc(out)
+        # out1 = out1 + out
+        # return out
+
+
+class CQ_trilinear_attn(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.linear1 = nn.Linear(dim, 1, bias=True)
+        self.linear2 = nn.Linear(dim, 1, bias=True)
+        self.linear3 = Variable(torch.randn([1, 1, dim]).cuda(async=True))
+        self.bias = Variable(torch.randn(1).cuda(async=True))
+
+    def forward(self, x1, x2, x1_mask, x2_mask):
+        """
+        :param x1: b x n x d
+        :param x2: b x m x d
+        :param x1_mask: b x n
+        :param x2_mask: b x m
+        """
+        # bxnxmxd
+        subres1 = self.linear1(x1).expand(x1.size(0), x1.size(1), x2.size(1))
+        subres2 = self.linear2(x2).expand(x1.size(0), x2.size(1), x1.size(1)).permute(0, 2, 1)
+        mul_tensor = self.linear3.repeat(x1.size(0), x1.size(1), 1)
+        mul_res = x1 * mul_tensor
+        tran_res = x2.permute(0, 2, 1)
+        subres3 = mul_res.bmm(tran_res)
+
+        similarity = subres1 + subres2 + subres3
+        similarity = torch.add(similarity, self.bias)
+        # bxnxm
+        x2_mask = x2_mask.unsqueeze(1).expand_as(similarity)
+        similarity.data.masked_fill_(x2_mask.data, -2e20)
+        # bxnxm
+        # c -> q
+        sim_row = F.softmax(similarity, dim=2)
+        attn_a = sim_row.bmm(x2)
+        # q -> c
+        x1_mask = x1_mask.unsqueeze(2).expand_as(similarity)
+        similarity.data.masked_fill_(x1_mask.data, -2e20)
+        sim_col = F.softmax(similarity, dim=1)
+        q2c = sim_col.transpose(1,2).bmm(x1)
+        attn_b = sim_row.bmm(q2c)
+        return attn_a, attn_b
 
 
 class CQattn(nn.Module):
@@ -395,3 +473,20 @@ def make_positions(tensor, padding_idx, left_pad):
     if left_pad:
         positions = positions - mask.size(1) + mask.long().sum(dim=1).unsqueeze(1)
     return tensor.clone().masked_scatter_(mask, positions[mask])
+
+
+def seq_dropout(x, p=0, training=False):
+    """
+    x: batch * len * input_size
+    """
+    if training == False or p == 0:
+        return x
+    dropout_mask = Variable(1.0 / (1 - p) * torch.bernoulli((1 - p) * (x.data.new(x.size(0), x.size(2)).zero_() + 1)),
+                            requires_grad=False)
+    return dropout_mask.unsqueeze(1).expand_as(x) * x
+
+def layer_dropout(inputs, residual, dropout, training=False):
+    if training and torch.rand([]) < dropout:
+        return residual
+    else:
+        return residual + F.dropout(inputs, p=dropout, training=training)

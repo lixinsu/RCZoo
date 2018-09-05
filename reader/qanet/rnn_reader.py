@@ -44,24 +44,25 @@ class RnnDocReader(nn.Module):
 
 
         # Highway network for initial encoding
-        self.embhighway = layers.Highway(2, 500)
+        self.embhighway = layers.Projected_Highway(2, 500, self.args.hidden_size)
 
 
 
         #Embedding Encoder Layer
-        self.q_enc = layers.Encoder(500, 500)
-        self.c_enc = layers.Encoder(500, 500)
+        self.q_enc = layers.Encoder(self.args.hidden_size, self.args.hidden_size, self.args.dropout_rnn)
+        self.c_enc = layers.Encoder(self.args.hidden_size, self.args.hidden_size, self.args.dropout_rnn)
 
 
-        self.qcattn = layers.CQattn(500)
+        # self.qcattn = layers.CQattn(500)
+        self.qcattn = layers.CQ_trilinear_attn(self.args.hidden_size)
 
-        self.compose = nn.Linear(2000,500)
+        self.compose = nn.Linear(4 * self.args.hidden_size, self.args.hidden_size)
         # model encoder layer
-        self.modelenc1 = layers.Encoder(500,500)
-        self.modelenc2 = layers.Encoder(500,500)
-        self.modelenc3 = layers.Encoder(500,500)
-        self.linears = nn.Linear(1000,1, bias=False)
-        self.lineare = nn.Linear(1000,1, bias=False)
+        self.modelenc1 = layers.Encoder(self.args.hidden_size,self.args.hidden_size, self.args.dropout_rnn)
+        self.modelenc2 = layers.Encoder(self.args.hidden_size,self.args.hidden_size, self.args.dropout_rnn)
+        self.modelenc3 = layers.Encoder(self.args.hidden_size,self.args.hidden_size, self.args.dropout_rnn)
+        self.linears = nn.Linear(2 * self.args.hidden_size,1, bias=False)
+        self.lineare = nn.Linear(2 * self.args.hidden_size,1, bias=False)
 
 
 
@@ -95,6 +96,9 @@ class RnnDocReader(nn.Module):
         x1_emb = torch.cat([x1_c_emb, x1_emb], dim=2)
         x2_emb = torch.cat([x2_c_emb, x2_emb], dim=2)
 
+        # sequence droppout
+        x1_emb = layers.seq_dropout(x1_emb, self.args.dropout_emb, training=self.training)
+        x2_emb = layers.seq_dropout(x2_emb, self.args.dropout_emb, training=self.training)
 
         x1_emb = self.embhighway(x1_emb)
         x2_emb = self.embhighway(x2_emb)
@@ -103,6 +107,9 @@ class RnnDocReader(nn.Module):
         x2enc = self.q_enc(x2, x2_emb, x2_mask)
         def pp(na,n):
             print(na,n.size())
+
+        x1enc = F.dropout(x1enc, self.args.dropout_rnn, self.training)
+        x2enc = F.dropout(x2enc, self.args.dropout_rnn, self.training)
         A, B = self.qcattn(x1enc, x2enc, x1_mask, x2_mask)
         fusion = torch.cat([x1enc, A, A * x1enc, B * x1enc], dim=2)
         fusion = self.compose(fusion)
@@ -111,6 +118,8 @@ class RnnDocReader(nn.Module):
         M3 = self.modelenc3(x1, M2, x1_mask)
         starts = self.linears(torch.cat([M1,M2],dim=2)).squeeze(2)
         ends = self.lineare(torch.cat([M1,M3],dim=2)).squeeze(2)
+        starts.data.masked_fill_(x1_mask.data, -2e20)
+        ends.data.masked_fill_(x1_mask.data, -2e20)
         if self.training:
             start_scores = F.log_softmax(starts,dim=1)
             end_scores = F.log_softmax(ends, dim=1)

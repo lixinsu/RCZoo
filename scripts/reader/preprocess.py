@@ -93,7 +93,7 @@ def process_dataset(data, tokenizer, workers=None):
     """Iterate processing (tokenize, parse, etc) dataset multithreaded."""
     tokenizer_class = tokenizers.get_class(tokenizer)
     make_pool = partial(Pool, workers, initializer=init)
-    workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}}))
+    workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'}}))
     init(tokenizer_class, {'annotators': {'lemma'}})
     #q_tokens = workers.map(tokenize, data['questions'])
     q_tokens = [tokenize(x) for x in data['questions'] ]
@@ -112,6 +112,8 @@ def process_dataset(data, tokenizer, workers=None):
     for idx in range(len(data['qids'])):
         question = q_tokens[idx]['words']
         qlemma = q_tokens[idx]['lemma']
+        q_pos = q_tokens[idx]['pos']
+        q_ner = q_tokens[idx]['ner']
         document = c_tokens[data['qid2cid'][idx]]['words']
         offsets = c_tokens[data['qid2cid'][idx]]['offsets']
         lemma = c_tokens[data['qid2cid'][idx]]['lemma']
@@ -135,6 +137,8 @@ def process_dataset(data, tokenizer, workers=None):
             'lemma': lemma,
             'pos': pos,
             'ner': ner,
+            'q_pos': q_pos,
+            'q_ner': q_ner
         }
 
 

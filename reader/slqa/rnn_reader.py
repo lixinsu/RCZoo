@@ -52,7 +52,7 @@ class RnnDocReader(nn.Module):
 
         self.enc_basic_q = layers.StackedBRNN(
             input_size=dim,
-            hidden_size=512,
+            hidden_size=256,
             num_layers=2,
             dropout_rate=0.2,
             dropout_output=True,
@@ -61,9 +61,9 @@ class RnnDocReader(nn.Module):
             padding=True,
         )
 
-        self.enc_basic_p = layers.StackedBRNN(
+        self.enc_basic = layers.StackedBRNN(
             input_size=dim,
-            hidden_size=512,
+            hidden_size=256,
             num_layers=2,
             dropout_rate=0.2,
             dropout_output=True,
@@ -72,18 +72,29 @@ class RnnDocReader(nn.Module):
             padding=True,
         )
 
-        hdim = 512 * 4   # 2 layers and 2 direction
+        hdim = 256 * 4   # 2 layers and 2 direction
         self.qc_attn = layers.BiAttention(hdim)
 
         self.fusion_q = layers.FusionLayer(hdim)
         self.fusion_p = layers.FusionLayer(hdim)
+
+        self.enc_att_doc = layers.StackedBRNN(
+                input_size=hdim,
+                hidden_size=256,
+                num_layers=2,
+                dropout_rate=0.2,
+                dropout_output=True,
+                concat_layers=True,
+                rnn_type=nn.GRU,
+                padding=True,
+                )
 
         self.selfattn_p = layers.BilinearAttention(hdim)
         self.fusion_self_p = layers.FusionLayer(hdim)
 
         self.enc_doc = layers.StackedBRNN(
                 input_size=hdim,
-                hidden_size=512,
+                hidden_size=256,
                 num_layers=2,
                 dropout_rate=0.2,
                 dropout_output=True,
@@ -94,7 +105,7 @@ class RnnDocReader(nn.Module):
 
         self.enc_query = layers.StackedBRNN(
                 input_size=hdim,
-                hidden_size=512,
+                hidden_size=256,
                 num_layers=2,
                 dropout_rate=0.2,
                 dropout_output=True,
@@ -140,19 +151,25 @@ class RnnDocReader(nn.Module):
         x1_emb = torch.cat([x1_c_emb, x1_emb], dim=2)
         x2_emb = torch.cat([x2_c_emb, x2_emb], dim=2)
 
-        x1_emb = F.dropout2d(x1_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
-        x2_emb = F.dropout2d(x2_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
+       # x1_emb = F.dropout2d(x1_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
+       # x2_emb = F.dropout2d(x2_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
+        x1_emb = layers.seq_dropout(x1_emb, p=0.2)
+        x2_emb = layers.seq_dropout(x2_emb, p=0.2)
 
-        x1_pro = self.emb_hw(x1_emb)
-        x2_pro = self.emb_hw(x2_emb)
+       # x1_pro = self.emb_hw(x1_emb)
+       # x2_pro = self.emb_hw(x2_emb)
+        x1_pro = x1_emb
+        x2_pro = x2_emb
 
-        x1_pro = self.enc_basic_q(x1_pro, x1_mask)
-        x2_pro = self.enc_basic_p(x2_pro, x2_mask)
+        x1_pro = self.enc_basic(x1_pro, x1_mask)
+        x2_pro = self.enc_basic(x2_pro, x2_mask)
 
         P_att, Q_att = self.qc_attn(x1_pro, x1_mask, x2_pro, x2_mask)
 
         P = self.fusion_p(P_att, x1_pro)
         Q = self.fusion_q(Q_att, x2_pro)
+
+        P = self.enc_att_doc(P, x1_mask)
 
         P_sattn = self.selfattn_p(P,P,x1_mask)
 

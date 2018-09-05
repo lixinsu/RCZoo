@@ -220,7 +220,7 @@ class BiAttention(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.linear_x1 = nn.Linear(dim, dim)
-        self.linear_x2 = nn.Linear(dim, dim)
+      #  self.linear_x2 = nn.Linear(dim, dim)
 
 
     def forward(self, x1, x1_mask, x2, x2_mask):
@@ -236,7 +236,7 @@ class BiAttention(nn.Module):
         """
         # bxnxmxd
         x1_proj = F.relu(self.linear_x1(x1))
-        x2_proj = F.relu(self.linear_x2(x2))
+        x2_proj = F.relu(self.linear_x1(x2))
         similarity = x1_proj.bmm(x2_proj.transpose(1, 2))
         # bxnxm
         x2_mask = x2_mask.unsqueeze(1).expand_as(similarity)
@@ -364,3 +364,15 @@ class LinearSeqAttn(nn.Module):
         res = alpha.unsqueeze(1).bmm(x).squeeze(1)
         return res
 
+
+# function
+
+
+def seq_dropout(x, p=0, training=False):
+    """
+    x: batch * len * input_size
+    """
+    if training == False or p == 0:
+        return x
+    dropout_mask = Variable(1.0 / (1-p) * torch.bernoulli((1-p) * (x.data.new(x.size(0), x.size(2)).zero_() + 1)), requires_grad=False)
+    return dropout_mask.unsqueeze(1).expand_as(x) * x
