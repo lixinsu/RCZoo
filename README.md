@@ -10,17 +10,19 @@ tqdm
 
 
 ## performance
+
+`new: We replace the orgin GloVE vector with ELMo embeddings. It bring a performance gain about 3 points in EM. The code is now in feature/elmo branch`  
 We train each model on train set for 40 epoch, and report the best performance on dev set.  
 
-Model | Exact Match | F1  
----- | --- | ---  
-Rnet | 69.25 | 78.97 
-BiDAF | 70.47 | 79.90 
-documentqa | 71.47 | 80.84 
-DrQA | 68.39 | 77.90 
-QAnet | ... | ... 
-SLQA | 67.09 | 76.67  
-FusionNet | 68.27 | 77.79  
+Model | Exact Match | F1 | EM(+ELMo) | F1(+ELMo) 
+---- | --- | --- | --- | ---
+Rnet | 69.25 | 78.97 | | |
+BiDAF | 70.47 | 79.90 | 73.04 | 81.48
+documentqa | 71.47 | 80.84 |  | |
+DrQA | 68.39 | 77.90 | | |
+QAnet | ... | ... | | |
+SLQA | 67.09 | 76.67 |  | |  
+FusionNet | 68.27 | 77.79 |  | | 
 
 
 ## Current progress
