@@ -5,11 +5,12 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 """Implementation of the RNN based DrQA reader."""
-
+import ipdb
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from . import layers
+from allennlp.modules.elmo import Elmo
 #import layers
 
 
@@ -24,6 +25,8 @@ class RnnDocReader(nn.Module):
     def __init__(self, args, normalize=True):
         super(RnnDocReader, self).__init__()
         # Store config
+        options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+        weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
         self.args = args
         args.char_emb = 20
 
@@ -35,7 +38,7 @@ class RnnDocReader(nn.Module):
                               batch_first=True,
                               bidirectional=True)
 
-
+        self.elmo = Elmo(options_file, weight_file, 1, dropout=0.5)
         # Word embeddings (+1 for padding)
         self.embedding = nn.Embedding(args.vocab_size,
                                       args.embedding_dim,
@@ -47,7 +50,8 @@ class RnnDocReader(nn.Module):
         # Input size to RNN: word emb + question emb + manual features
         # RNN document encoder
 
-        dim = args.embedding_dim + args.char_emb * 2
+        #dim = args.embedding_dim + args.char_emb * 2
+        dim = 1024
 
         self.emb_hw = layers.Highway( 2, dim, gate_bias=-2 )
 
@@ -98,7 +102,7 @@ class RnnDocReader(nn.Module):
                 nn.Linear(64, 1)
                 )
 
-    def forward(self, x1, x1_c, x1_mask, x2, x2_c, x2_mask):
+    def forward(self, x1, x1_c, x1_mask, x2, x2_c, x2_mask, elmo_x1, elmo_x2):
         """Inputs:
         x1 = document word indices             [batch * len_d]
         x1_c = document char indices           [batch * len_d * word_len]
@@ -112,6 +116,7 @@ class RnnDocReader(nn.Module):
         x1_c_emb = self.char_embedding(x1_c.view(b * sl, wl))
         _ , x1_c_emb = self.emb_rnn(x1_c_emb)
         x1_c_emb = torch.cat(list(x1_c_emb), dim=1).view(b, sl, -1)
+
 
         b, sl, wl = x2_c.size()
         x2_c_emb = self.char_embedding(x2_c.view(b*sl, wl))
@@ -134,17 +139,24 @@ class RnnDocReader(nn.Module):
         #x2_cove_emb = self.cove_embedding(x2_emb, x2_lens)
 
 
+        # ELMo contextualized embedding
+        x1_elmo = self.elmo(elmo_x1)['elmo_representations'][0]
+        x2_elmo = self.elmo(elmo_x2)['elmo_representations'][0]
 
         # concatenate the embedding from char and word
-        x1_emb = torch.cat([x1_c_emb, x1_emb], dim=2)
-        x2_emb = torch.cat([x2_c_emb, x2_emb], dim=2)
+        #x1_emb = torch.cat([x1_c_emb, x1_emb], dim=2)
+        #x2_emb = torch.cat([x2_c_emb, x2_emb], dim=2)
 
-        x1_emb = F.dropout2d(x1_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
-        x2_emb = F.dropout2d(x2_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
 
+        #x1_emb = F.dropout2d(x1_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
+        #x2_emb = F.dropout2d(x2_emb.unsqueeze(3), p=0.1, training=self.training).squeeze(3)
+
+        x1_emb = x1_elmo
+        x2_emb = x2_elmo
         # bxnx400
         x1_pro = self.emb_hw(x1_emb)
         x2_pro = self.emb_hw(x2_emb)
+
 
         # bxnx(64*4)  bxmx(64*4)
         x1_pro = self.enc_rnn(x1_pro, x1_mask)

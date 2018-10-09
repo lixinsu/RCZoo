@@ -5,7 +5,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 """Functions for putting examples into torch format."""
-
+from allennlp.modules.elmo import batch_to_ids
 from collections import Counter
 import torch
 
@@ -42,7 +42,7 @@ def vectorize(ex, model, single_answer=False):
         start = [a[0] for a in ex['answers']]
         end = [a[1] for a in ex['answers']]
 
-    return document, document_char, question, question_char, start, end, ex['id']
+    return document, document_char, question, question_char, start, end, ex['document'], ex['question'], ex['id']
 
 
 def batchify(batch):
@@ -52,6 +52,12 @@ def batchify(batch):
     NUM_EXTRA = 1
 
     ids = [ex[-1] for ex in batch]
+    text_docs = [ex[-3] for ex in batch]
+    text_ques = [ex[-2] for ex in batch]
+
+    elmo_docs = batch_to_ids(text_docs)
+    elmo_ques = batch_to_ids(text_ques)
+
     docs = [ex[0] for ex in batch]
     docs_char = [ex[1] for ex in batch]
     word_len = docs_char[0].size(1)
@@ -66,7 +72,6 @@ def batchify(batch):
         x1[i, :d.size(0)].copy_(d)
         x1_c[i, :d.size(0), :].copy_(docs_char[i])
         x1_mask[i, :d.size(0)].fill_(0)
-
     # Batch questions
     max_length = max([q.size(0) for q in questions])
     x2 = torch.LongTensor(len(questions), max_length).zero_()
@@ -84,4 +89,4 @@ def batchify(batch):
     else:
         y_s = [ex[4] for ex in batch]
         y_e = [ex[5] for ex in batch]
-    return x1, x1_c, x1_mask, x2, x2_c, x2_mask, y_s, y_e, ids
+    return x1, x1_c, x1_mask, x2, x2_c, x2_mask, elmo_docs, elmo_ques, y_s, y_e, ids

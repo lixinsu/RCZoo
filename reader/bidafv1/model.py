@@ -6,7 +6,6 @@
 # LICENSE file in the root directory of this source tree.
 """DrQA Document Reader model"""
 
-import ipdb
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -201,13 +200,13 @@ class DocReader(object):
         # Transfer to GPU
         if self.use_cuda:
             inputs = [e if e is None else Variable(e.cuda(async=True))
-                      for e in ex[:6]]
-            target_s = Variable(ex[6].cuda(async=True))
-            target_e = Variable(ex[7].cuda(async=True))
+                      for e in ex[:8]]
+            target_s = Variable(ex[8].cuda(async=True))
+            target_e = Variable(ex[9].cuda(async=True))
         else:
-            inputs = [e if e is None else Variable(e) for e in ex[:5]]
-            target_s = Variable(ex[6])
-            target_e = Variable(ex[7])
+            inputs = [e if e is None else Variable(e) for e in ex[:8]]
+            target_s = Variable(ex[8])
+            target_e = Variable(ex[9])
 
         # Run forward
         score_s, score_e = self.network(*inputs)
@@ -281,16 +280,16 @@ class DocReader(object):
         if self.use_cuda:
             inputs = [e if e is None else
                       Variable(e.cuda(async=True))
-                      for e in ex[:6]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
+                      for e in ex[:8]]
+            gt_s =  [x[0] for x in ex[8]]
+            gt_e =  [x[0] for x in ex[9]]
             target_s = torch.LongTensor(gt_s).cuda()
             target_e = torch.LongTensor(gt_e).cuda()
         else:
             inputs = [e if e is None else Variable(e)
-                      for e in ex[:6]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
+                      for e in ex[:8]]
+            gt_s =  [x[0] for x in ex[8]]
+            gt_e =  [x[0] for x in ex[9]]
             target_s = torch.LongTensor(gt_s)
             target_e = torch.LongTensor(gt_e)
 
