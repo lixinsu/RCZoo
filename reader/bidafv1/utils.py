@@ -88,6 +88,12 @@ def load_answers(filename):
             for paragraph in article['paragraphs']:
                 for qa in paragraph['qas']:
                     ans[qa['id']] = list(map(lambda x: x['text'], qa['answers']))
+    elif 'baseline' in filename:
+        ans = {}
+        with open(filename) as f:
+            for line in f :
+                row = json.loads(line)
+                ans[row['query_id']] = row['answers']
     else:
         ans = {}
         with open(filename) as f:

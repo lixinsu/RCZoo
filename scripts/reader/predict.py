@@ -14,7 +14,6 @@ import logging
 import json
 
 from tqdm import tqdm
-from reader.docqa import Predictor
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -24,6 +23,8 @@ console.setFormatter(fmt)
 logger.addHandler(console)
 
 parser = argparse.ArgumentParser()
+parser.add_argument('modeltype', type=str, default=None,
+                    help='model type')
 parser.add_argument('dataset', type=str, default=None,
                     help='SQuAD-like dataset to evaluate on')
 parser.add_argument('--model', type=str, default=None,
@@ -58,6 +59,20 @@ if args.cuda:
     logger.info('CUDA enabled (GPU %d)' % args.gpu)
 else:
     logger.info('Running on CPU only.')
+
+if args.modeltype == 'docqa':
+    from reader.docqa import Predictor
+elif args.modeltype == 'drqa':
+    from reader.drqa import Predictor
+elif args.modeltype == 'bidaf':
+    from reader.bidafv1 import Predictor
+elif args.modeltype == 'slqa':
+    from reader.slqa import Predictor
+elif args.modeltype == 'fusionnet':
+    from reader.fusionnet import Predictor
+elif args.modeltype == 'rnet':
+    from reader.rnet import Predictor
+
 
 predictor = Predictor(
     model=args.model,

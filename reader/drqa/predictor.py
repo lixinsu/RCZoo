@@ -117,6 +117,8 @@ class Predictor(object):
                 'lemma': d_tokens[i].lemmas(),
                 'pos': d_tokens[i].pos(),
                 'ner': d_tokens[i].entities(),
+                'answers': [(0,0)]
+
             })
 
         # Stick document tokens in candidates for decoding
@@ -126,7 +128,7 @@ class Predictor(object):
 
         # Build the batch and run it through the model
         batch_exs = batchify([vectorize(e, self.model) for e in examples])
-        s, e, score = self.model.predict(batch_exs, candidates, top_n)
+        (s, e, score ), _ = self.model.predict(batch_exs, candidates, top_n)
 
         # Retrieve the predicted spans
         results = []
