@@ -6,7 +6,6 @@
 # LICENSE file in the root directory of this source tree.
 """DrQA Document Reader model"""
 
-import ipdb
 import torch
 import torch.optim as optim
 import torch.nn.functional as F

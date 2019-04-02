@@ -6,6 +6,9 @@
 # LICENSE file in the root directory of this source tree.
 """DrQA Document Reader model"""
 
+import math
+import random
+
 import ipdb
 import torch
 import torch.optim as optim
@@ -30,7 +33,7 @@ class DocReader(object):
     # Initialization
     # --------------------------------------------------------------------------
 
-    def __init__(self, args, word_dict, char_dict,feature_dict,
+    def __init__(self, args, word_dict, char_dict, feature_dict,
                  state_dict=None, normalize=True):
         # Book-keeping.
         self.args = args
@@ -104,7 +107,7 @@ class DocReader(object):
         with open(embedding_file) as f:
             for line in f:
                 parsed = line.rstrip().split(' ')
-                assert(len(parsed) == embedding.size(1) + 1)
+                assert (len(parsed) == embedding.size(1) + 1)
                 w = self.word_dict.normalize(parsed[0])
                 if w in words:
                     vec = torch.Tensor([float(i) for i in parsed[1:]])
@@ -211,14 +214,213 @@ class DocReader(object):
 
         # Run forward
         score_s, score_e = self.network(*inputs)
-        # Compute loss and accuracies
 
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        if self.args.smooth == 'gauss':
+            # label smoothing
+            class GussianNoise(object):
+                def __init__(self, mu, sigma):
+                    self.mu = mu
+                    self.sigma = sigma
 
+                def pdf(self, x):
+                    return 1.0 / math.sqrt(
+                        2 * math.pi * self.sigma * self.sigma) * math.exp(
+                        -(x - self.mu) * (
+                            x - self.mu) / 2 / self.sigma / self.sigma)
+
+                def get_prob(self, x):
+                    return self.pdf(x)
+
+                def get_probs(self, n):
+                    return np.array([self.get_prob(x) for x in range(n)])
+
+            doc_lenths = (ex[2].size(1) - ex[2].sum(dim=1)).tolist()
+            answer_lengths = (target_e + 1 - target_s).tolist()
+            start_mu = target_s.tolist()
+            end_mu = target_e.tolist()
+            start_proba = []
+            end_proba = []
+            paded_doc_length = ex[2].size(1)
+            for s, e, sigma, doc_len in zip(start_mu, end_mu, answer_lengths,
+                                            doc_lenths):
+                start_proba.append(
+                    GussianNoise(s, sigma * self.args.smooth_scale).get_probs(
+                        paded_doc_length))
+                end_proba.append(
+                    GussianNoise(e, sigma * self.args.smooth_scale).get_probs(
+                        paded_doc_length))
+            start_proba = torch.Tensor(start_proba).cuda()
+            end_proba = torch.Tensor(end_proba).cuda()
+
+            if self.args.add_main:
+                # Add main
+                main_s = torch.zeros(score_e.size()).cuda()
+                main_e = torch.zeros(score_e.size()).cuda()
+                main_s.scatter_(1, target_s.unsqueeze(1), 1)
+                main_e.scatter_(1, target_e.unsqueeze(1), 1)
+                start_proba += main_s
+                end_proba += main_e
+
+            # previous normalization
+            start_proba.masked_fill_(ex[2].cuda(), 0)
+            end_proba.masked_fill_(ex[2].cuda(), 0)
+            start_proba = start_proba / start_proba.sum(dim=1).unsqueeze(1)
+            end_proba = end_proba / end_proba.sum(dim=1).unsqueeze(1)
+
+            loss = F.kl_div(score_s, start_proba,
+                            reduction='batchmean') + F.kl_div(score_e,
+                                                              end_proba,
+                                                              reduction='batchmean')
+            if self.args.multiloss:
+                loss = loss * self.args.newloss_scale + F.nll_loss(score_s,
+                                                                   target_s) + F.nll_loss(
+                    score_e,
+                    target_e)
+
+        elif self.args.smooth == 'smooth':
+            alpha = self.args.normal_alpha
+            main_s = torch.zeros(score_e.size()).cuda()
+            main_e = torch.zeros(score_e.size()).cuda()
+            main_s.scatter_(1, target_s.unsqueeze(1), 1)
+            main_e.scatter_(1, target_e.unsqueeze(1), 1)
+            start = torch.ones(score_e.size())
+            start.masked_fill_(ex[2], 0)
+            start = start / start.sum(dim=-1, keepdim=True)
+            start = start.cuda()
+            start_gt = main_s * (1 - alpha) + alpha * start
+            end_gt = main_e * (1 - alpha) + alpha * start
+            loss = torch.sum(- start_gt * score_s, -1) + \
+                   torch.sum(- end_gt * score_e, -1)
+            loss = loss.mean()
+
+        elif self.args.smooth == 'reinforcement':
+            def f1(s, e, s_, e_):
+                gt = set(range(s, e + 1))
+                pr = set(range(s_, e_ + 1))
+                common = gt & pr
+                if len(common) == 0:
+                    return 0
+                p = len(common) / len(pr)
+                r = len(common) / len(gt)
+                return 2 * p * r / (p + r)
+
+            start_idx = torch.multinomial(torch.exp(score_s), 1)
+            end_idx = torch.multinomial(torch.exp(score_e), 1)
+            start_idx = start_idx.flatten()
+            end_idx = end_idx.flatten()
+
+            cpu_start_idx = start_idx.tolist()
+            cpu_end_idx = end_idx.tolist()
+
+            greedy_start_idx = torch.argmax(score_s, dim=1).tolist()
+            greedy_end_idx = torch.argmax(score_e, dim=1).tolist()
+
+            gt_start = target_s.tolist()
+            gt_end = target_e.tolist()
+
+            base_rewards = []
+            for s, e, s_, e_ in zip(gt_start, gt_end, greedy_start_idx,
+                                    greedy_end_idx):
+                base_rewards.append(f1(s, e, s_, e_))
+            base_rewards = torch.Tensor(base_rewards).cuda()
+
+            rewards = []
+            for s, e, s_, e_ in zip(gt_start, gt_end, cpu_start_idx,
+                                    cpu_end_idx):
+                rewards.append(f1(s, e, s_, e_))
+            rewards = torch.Tensor(rewards).cuda()
+
+            mle_loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e,
+                                                                  target_e)
+            augment_loss = F.nll_loss(score_s, start_idx, reduction='none') + \
+                           F.nll_loss(score_e, end_idx, reduction='none')
+
+            augment_loss *= (rewards - base_rewards)
+
+            loss = (1 - self.args.newloss_scale) * mle_loss + \
+                   self.args.newloss_scale * augment_loss.mean()
+
+
+        elif self.args.smooth == 'reinforcement_mnemonic':
+            pass
+
+        elif self.args.smooth == 'reward':
+            def f1(s, e, s_, e_):
+                gt = set(range(s, e + 1))
+                pr = set(range(s_, e_ + 1))
+                common = gt & pr
+                if len(common) == 0:
+                    return 0
+                p = len(common) / len(pr)
+                r = len(common) / len(gt)
+                return 2 * p * r / (p + r)
+
+            def calculate_reward(s, e, n, pad_n, val=-2000):
+                start = [val] * pad_n
+                end = [val] * pad_n
+                for i in range(max(0, s - 5), e + 1):
+                    start[i] = f1(s, e, i, e)
+                for i in range(s, min(n, e + 5)):
+                    end[i] = f1(s, e, s, i)
+                return start, end
+
+            def softmax(li, T=0.5):
+                exp_li = [math.exp(x / T) for x in li]
+                nomi = sum(exp_li)
+                return [x / nomi for x in exp_li]
+
+            def make_proba(li):
+                nomi = sum(li)
+                return [x / nomi for x in li]
+
+            start_mu = target_s.tolist()
+            end_mu = target_e.tolist()
+            doc_lengths = (ex[2].size(1) - ex[2].sum(dim=1)).tolist()
+            start_gt = []
+            end_gt = []
+            for s, e, n in zip(start_mu, end_mu, doc_lengths):
+                if self.args.use_softmax:
+                    start_, end_ = calculate_reward(s, e, n, ex[2].size(1))
+                    start_gt.append(softmax(start_, self.args.temperature))
+                    end_gt.append(softmax(end_, self.args.temperature))
+                else:
+                    start_, end_ = calculate_reward(s, e, n, ex[2].size(1),
+                                                    val=0)
+                    start_gt.append(start_)
+                    end_gt.append(end_)
+            start_gt = torch.Tensor(start_gt).cuda()
+            end_gt = torch.Tensor(end_gt).cuda()
+
+            if self.args.interpolation_inside:
+                alpha = self.args.alpha
+                main_s = torch.zeros(score_e.size()).cuda()
+                main_e = torch.zeros(score_e.size()).cuda()
+                main_s.scatter_(1, target_s.unsqueeze(1), 1)
+                main_e.scatter_(1, target_e.unsqueeze(1), 1)
+                start_gt = main_s * (1 - alpha) + alpha * start_gt
+                end_gt += main_e * (1 - alpha) + alpha * end_gt
+
+            loss = F.kl_div(score_s, start_gt,
+                            reduction='batchmean') +\
+                   F.kl_div(score_e,
+                                                              end_gt,
+                                                              reduction='batchmean')
+            if self.args.multiloss:
+                loss = loss * self.args.newloss_scale + \
+                       F.nll_loss(score_s, target_s) + \
+                       F.nll_loss(score_e, target_e)
+
+        elif self.args.smooth == 'ce':
+            # Compute loss and accuracies
+            loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e,
+                                                              target_e)
+
+        else:
+            raise "Undefine loss"
         # Clear gradients and run backward
         self.optimizer.zero_grad()
         loss.backward()
-        #for name, param in self.network.named_parameters():
+        # for name, param in self.network.named_parameters():
         #    if param.requires_grad:
         #        print("-"*40,name,"-"*40)
         #        print(torch.sum(param.grad))
@@ -282,21 +484,20 @@ class DocReader(object):
             inputs = [e if e is None else
                       Variable(e.cuda(async=True))
                       for e in ex[:6]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
+            gt_s = [x.item() for x in ex[6]]
+            gt_e = [x.item() for x in ex[7]]
             target_s = torch.LongTensor(gt_s).cuda()
             target_e = torch.LongTensor(gt_e).cuda()
         else:
             inputs = [e if e is None else Variable(e)
                       for e in ex[:6]]
-            gt_s =  [x[0] for x in ex[6]]
-            gt_e =  [x[0] for x in ex[7]]
+            gt_s = [x[0] for x in ex[6]]
+            gt_e = [x[0] for x in ex[7]]
             target_s = torch.LongTensor(gt_s)
             target_e = torch.LongTensor(gt_e)
 
         # Run forward
         score_s, score_e = self.network(*inputs)
-
 
         loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
 
@@ -458,7 +659,8 @@ class DocReader(object):
         args = saved_params['args']
         if new_args:
             args = override_model_args(args, new_args)
-        return DocReader(args, word_dict, char_dict, feature_dict, state_dict, normalize)
+        return DocReader(args, word_dict, char_dict, feature_dict, state_dict,
+                         normalize)
 
     @staticmethod
     def load_checkpoint(filename, normalize=True):
@@ -473,7 +675,8 @@ class DocReader(object):
         epoch = saved_params['epoch']
         optimizer = saved_params['optimizer']
         args = saved_params['args']
-        model = DocReader(args, word_dict, char_dict, feature_dict, state_dict, normalize)
+        model = DocReader(args, word_dict, char_dict, feature_dict, state_dict,
+                          normalize)
         model.init_optimizer(optimizer)
         return model, epoch
 

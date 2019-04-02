@@ -464,7 +464,7 @@ def main(args):
         collate_fn=vector.batchify,
         pin_memory=args.cuda,
     )
-    dev_dataset = data.ReaderDataset(dev_exs, model, single_answer=False)
+    dev_dataset = data.ReaderDataset(dev_exs, model, single_answer=True)
     if args.sort_by_len:
         dev_sampler = data.SortedBatchSampler(dev_dataset.lengths(),
                                               args.test_batch_size,
@@ -556,6 +556,8 @@ if __name__ == '__main__':
     console = logging.StreamHandler()
     console.setFormatter(fmt)
     logger.addHandler(console)
+    if os.path.exists(args.log_file):
+        raise "Stop overwriting existing log file"
     if args.log_file:
         if args.checkpoint:
             logfile = logging.FileHandler(args.log_file, 'a')

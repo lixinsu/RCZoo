@@ -31,4 +31,3 @@ def compare_result(files):
 
 if __name__ == '__main__':
     compare_result(sys.argv[1:])
-

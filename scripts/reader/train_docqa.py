@@ -63,7 +63,7 @@ def add_train_args(parser):
                                'operations (for reproducibility)'))
     runtime.add_argument('--num-epochs', type=int, default=40,
                          help='Train data iterations')
-    runtime.add_argument('--batch-size', type=int, default=32,
+    runtime.add_argument('--batch-size', type=int, default=16,
                          help='Batch size for training')
     runtime.add_argument('--test-batch-size', type=int, default=32,
                          help='Batch size during validation/testing')

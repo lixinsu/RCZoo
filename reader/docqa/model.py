@@ -6,7 +6,6 @@
 # LICENSE file in the root directory of this source tree.
 """DrQA Document Reader model"""
 
-import ipdb
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -16,7 +15,7 @@ import copy
 
 from torch.autograd import Variable
 from .config import override_model_args
-from .rnn_reader import RnnDocReader
+from .rnn_reader import Reader
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ class DocReader(object):
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
-            self.network = RnnDocReader(args, normalize)
+            self.network = Reader(args)
             print( get_n_params(self.network) )
         else:
             raise RuntimeError('Unsupported model: %s' % args.model_type)
@@ -241,7 +240,7 @@ class DocReader(object):
 
         # Reset any partially fixed parameters (e.g. rare words)
         self.reset_parameters()
-        lossval = loss.data.item()
+        lossval = loss.item()
         return lossval, ex[0].size(0)
 
     def reset_parameters(self):

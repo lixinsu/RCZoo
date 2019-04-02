@@ -231,7 +231,7 @@ class DocReader(object):
         # Reset any partially fixed parameters (e.g. rare words)
         self.reset_parameters()
 
-        return loss.data[0], ex[0].size(0)
+        return loss.item(), ex[0].size(0)
 
     def reset_parameters(self):
         """Reset any partially fixed parameters to original states."""

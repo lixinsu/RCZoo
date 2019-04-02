@@ -50,9 +50,9 @@ def tokenize(text):
 # ------------------------------------------------------------------------------
 
 
-def load_dataset(path):
+def load_dataset(path, mode='SQuAD'):
     """Load json file and store fields separately."""
-    if 'SQuAD' in path:
+    if 'SQuAD' == mode:
         with open(path) as f:
             data = json.load(f)['data']
         output = {'qids': [], 'questions': [], 'answers': [],
@@ -66,8 +66,9 @@ def load_dataset(path):
                     output['qid2cid'].append(len(output['contexts']) - 1)
                     if 'answers' in qa:
                         output['answers'].append(qa['answers'])
-    elif 'multispan' in path or 'baseline' in  path:
-        output =  {'qids':[], 'questions':[], 'answers': [], 'contexts': [], 'qid2cid': [], 'positions': []}
+    elif mode == 'multispan':
+        output =  {'qids':[], 'questions':[], 'answers': [], 'contexts': [],
+                   'qid2cid': [], 'positions': []}
         with open(path) as f:
             for line in f:
                 data = json.loads(line)
@@ -77,6 +78,46 @@ def load_dataset(path):
                 output['positions'].append(data['positions'])
                 output['qid2cid'].append(len(output['contexts']) - 1)
                 output['answers'].append(data['answers'])
+    # 读取Quac上的模型
+    elif mode == 'quac':
+        print('quac')
+        output = {'qids': [], 'questions': [], 'answers': [], 'contexts': [],
+                  'qid2cid': [], 'positions': []}
+        data = json.load(open(path))['data']
+        skip = 0
+        for datum in data:
+            for para in datum['paragraphs']:
+                output['contexts'].append(para['context'])
+                for qa in para['qas']:
+                    if qa['answers'][0]['text'] != 'CANNOTANSWER':
+                        output['qids'].append(qa['id'])
+                        output['questions'].append(qa['question'])
+                        output['qid2cid'].append(len(output['contexts']) - 1)
+                        if 'answers' in qa:
+                            output['answers'].append(qa['answers'])
+                    else:
+                        skip += 1
+        print(skip)
+    elif mode == 'quac_hist2':
+        print('process with history 2 ...')
+        output = {'qids': [], 'questions': [], 'answers': [], 'contexts': [],
+                  'qid2cid': [], 'positions': []}
+        data = json.load(open(path))['data']
+        for datum in data:
+            for para in datum['paragraphs']:
+                output['contexts'].append(para['context'])
+                for idx, qa in enumerate(para['qas']):
+                    if qa['answers'][0]['text'] != 'CANNOTANSWER':
+                        question = qa['question']
+                        if idx >= 1:
+                            question = para['qas'][idx-1]['question'] + '<Q>' + question
+                        if idx >= 2:
+                            question = para['qas'][idx-2]['question'] + '<Q>' + question
+                        output['qids'].append(qa['id'])
+                        output['questions'].append(question)
+                        output['qid2cid'].append(len(output['contexts']) - 1)
+                        if 'answers' in qa:
+                            output['answers'].append(qa['answers'])
     else:
         output = {'qids': [], 'questions': [], 'answers': [],
                   'contexts': [], 'qid2cid': []}
@@ -172,20 +213,22 @@ parser.add_argument('--split', type=str, help='Filename for train/dev split',
                     default='SQuAD-v1.1-train')
 parser.add_argument('--workers', type=int, default=None)
 parser.add_argument('--tokenizer', type=str, default='spacy')
+parser.add_argument('--mode', type=str, default='SQuAD')
+
 args = parser.parse_args()
 
 t0 = time.time()
 
 in_file = os.path.join(args.data_dir, args.split + '.json')
 print('Loading dataset %s' % in_file, file=sys.stderr)
-dataset = load_dataset(in_file)
+dataset = load_dataset(in_file, mode=args.mode)
 
 out_file = os.path.join(
     args.out_dir, '%s-processed-%s.txt' % (args.split, args.tokenizer)
 )
 print('Will write to file %s' % out_file, file=sys.stderr)
 multispan = False
-if 'multispan' in in_file or 'baseline' in in_file:
+if 'multispan' == args.mode:
     multispan = True
 with open(out_file, 'w') as f:
     for ex in process_dataset(dataset, args.tokenizer, args.workers, multispan=multispan):

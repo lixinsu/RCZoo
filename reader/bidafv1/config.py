@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 MODEL_ARCHITECTURE = {
     'model_type', 'embedding_dim', 'hidden_size', 'doc_layers',
     'question_layers', 'rnn_type', 'concat_rnn_layers', 'question_merge',
-    'use_qemb', 'use_in_question', 'use_pos', 'use_ner', 'use_lemma', 'use_tf'
+    'use_qemb', 'use_in_question', 'use_pos', 'use_ner', 'use_lemma', 'use_tf',
+    'smooth', 'smooth_scale', 'add_main', 'temperature','multiloss', 'newloss_scale',
+    'use_softmax', 'interpolation_inside', 'alpha', 'normal_alpha'
 }
 
 # Index of arguments concerning the model optimizer/training
@@ -66,7 +68,26 @@ def add_model_args(parser):
                         help='Whether to use lemma features')
     detail.add_argument('--use-tf', type='bool', default=True,
                         help='Whether to use term frequency features')
-
+    detail.add_argument('--smooth-scale', type=float, default=0.01,
+                        help='guass smooth scale')
+    detail.add_argument('--smooth', type=str, default='',
+                         help='Label smoothing function')
+    detail.add_argument('--add-main', type=bool, default=True,
+                        help='Add main position')
+    detail.add_argument('--multiloss', type='bool', default=False,
+                        help='Add main position')
+    detail.add_argument('--temperature', type=float, default=0.5,
+                        help='softmax temperature')
+    detail.add_argument('--newloss-scale', type=float, default=1.0,
+                        help='Loss scale')
+    detail.add_argument('--use-softmax', type='bool', default=True,
+                        help='Whether use softmax')
+    detail.add_argument('--interpolation-inside', type='bool', default='False',
+                        help='Whether interplote in the proba')
+    detail.add_argument('--alpha', type=float, default=0,
+                        help='Interplote weight')
+    detail.add_argument('--normal-alpha', type=float, default=0,
+                        help='Normal label smoothing, interplotation weight')
     # Optimization details
     optim = parser.add_argument_group('DrQA Reader Optimization')
     optim.add_argument('--dropout-emb', type=float, default=0.4,

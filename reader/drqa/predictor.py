@@ -13,7 +13,7 @@ from multiprocessing.util import Finalize
 
 from .vector import vectorize, batchify
 from .model import DocReader
-from . import DEFAULTS, utils
+from . import utils
 from .. import tokenizers
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class Predictor(object):
             num_workers: number of CPU processes to use to preprocess batches.
         """
         logger.info('Initializing model...')
-        self.model = DocReader.load(model or DEFAULTS['model'],
+        self.model = DocReader.load(model,
                                     normalize=normalize)
 
         if embedding_file:
@@ -68,10 +68,8 @@ class Predictor(object):
 
         logger.info('Initializing tokenizer...')
         annotators = tokenizers.get_annotators_for_model(self.model)
-        if not tokenizer:
-            tokenizer_class = DEFAULTS['tokenizer']
-        else:
-            tokenizer_class = tokenizers.get_class(tokenizer)
+
+        tokenizer_class = tokenizers.get_class(tokenizer)
 
         if num_workers is None or num_workers > 0:
             self.workers = ProcessPool(

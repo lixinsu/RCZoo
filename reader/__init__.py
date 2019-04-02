@@ -18,5 +18,6 @@ DATA_DIR = (
 )
 
 from . import tokenizers
-from . import rnet
-from . import bidafv1
+from . import layers
+from . import docqa
+

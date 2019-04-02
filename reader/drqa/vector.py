@@ -65,13 +65,13 @@ def vectorize(ex, model, single_answer=False):
         return document, features, question, ex['id']
 
     # ...or with target(s) (might still be empty if answers is empty)
-    if single_answer:
-        assert(len(ex['answers']) > 0)
-        start = torch.LongTensor(1).fill_(ex['answers'][0][0])
-        end = torch.LongTensor(1).fill_(ex['answers'][0][1])
-    else:
-        start = [a[0] for a in ex['answers']]
-        end = [a[1] for a in ex['answers']]
+    # if single_answer:
+    #     assert(len(ex['answers']) > 0)
+    start = torch.LongTensor(1).fill_(ex['answers'][0][0])
+    end = torch.LongTensor(1).fill_(ex['answers'][0][1])
+    # else:
+    #     start = [a[0] for a in ex['answers']]
+    #     end = [a[1] for a in ex['answers']]
 
     return document, features, question, start, end, ex['id']
 

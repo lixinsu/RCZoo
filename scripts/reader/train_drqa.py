@@ -208,8 +208,8 @@ def init_from_scratch(args, train_exs, dev_exs):
     model = DocReader(config.get_model_args(args), word_dict,feature_dict)
 
     # Load pretrained embeddings for words in dictionary
-    if args.embedding_file:
-        model.load_embeddings(word_dict.tokens(), args.embedding_file)
+    #if args.embedding_file:
+    #    model.load_embeddings(word_dict.tokens(), args.embedding_file)
 
     return model
 
@@ -503,7 +503,7 @@ def main(args):
         stats['epoch'] = epoch
 
         # Train
-        train(args, train_loader, model, stats)
+        #train(args, train_loader, model, stats)
 
         # Validate unofficial (train)
         result = validate_unofficial(args, train_loader, model, stats, mode='train')

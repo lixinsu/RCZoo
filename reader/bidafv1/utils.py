@@ -54,10 +54,10 @@ def load_data(args, filename, skip_no_answer=False):
 
 
 
-def load_text(filename):
+def load_text(filename, mode='squad'):
     """Load the paragraphs only of a SQuAD dataset. Store as qid -> text."""
     # Load JSON file
-    if 'SQuAD' in filename:
+    if 'squad' == mode.lower():
         with open(filename) as f:
             examples = json.load(f)['data']
 
@@ -76,10 +76,10 @@ def load_text(filename):
 
 
 
-def load_answers(filename):
+def load_answers(filename, mode='squad'):
     """Load the answers only of a SQuAD dataset. Store as qid -> [answers]."""
     # Load JSON file
-    if 'SQuAD' in filename:
+    if 'squad' == mode.lower():
         with open(filename) as f:
             examples = json.load(f)['data']
 
