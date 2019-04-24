@@ -24,6 +24,7 @@ from .rnn_reader import RnnDocReader
 logger = logging.getLogger(__name__)
 
 
+
 class DocReader(object):
     """High level model that handles intializing the underlying network
     architecture, saving, updating examples, and predicting examples.
@@ -293,7 +294,7 @@ class DocReader(object):
                    torch.sum(- end_gt * score_e, -1)
             loss = loss.mean()
 
-        elif self.args.smooth == 'reinforcement':
+        elif self.args.smooth == 'scst':
             def f1(s, e, s_, e_):
                 gt = set(range(s, e + 1))
                 pr = set(range(s_, e_ + 1))
@@ -341,8 +342,82 @@ class DocReader(object):
                    self.args.newloss_scale * augment_loss.mean()
 
 
-        elif self.args.smooth == 'reinforcement_mnemonic':
-            pass
+        elif self.args.smooth == 'dcrl':
+            def mask_to_start(score, start, score_mask_value=-1e30):
+                score_mask = torch.ones_like(start) - torch.cumsum(start, dim=-1).float()
+                return score + score_mask * score_mask_value
+
+            def get_f1(y_pred, y_true):
+                y_true = y_true.float()
+                y_union = torch.clamp(y_pred + y_true, 0, 1)  # [bs, seq]
+                y_diff = torch.abs(y_pred - y_true)  # [bs, seq]
+                num_same = (torch.sum(y_union, dim=-1) - torch.sum(y_diff, dim=-1)).float()  # [bs,]
+                y_precision = num_same / (torch.sum(y_pred, dim=-1).float() + 1e-7)  # [bs,]
+                y_recall = num_same / (torch.sum(y_true, dim=-1).float() + 1e-7)  # [bs,]
+                y_f1 = (2.0 * y_precision * y_recall) / ((y_precision + y_recall).float() + 1e-7)  # [bs,]
+                return torch.clamp(y_f1, 0, 1)
+
+            def one_hot(tensor):
+                rv = torch.LongTensor(score_s.size())
+                rv.zero_()
+                rv.scatter_(1, tensor, 1)
+                return rv
+            #start_one_hot = tf.one_hot(start_positions, depth=seq_length)
+            #start_one_hot = torch.LongTensor(*score_s.size())
+            #start_one_hot.zero_()
+            #start_one_hot.scatter_(1, target_s, 1)
+            star_one_hot = one_hot(target_s)
+
+            #end_one_hot = tf.one_hot(end_positions, depth=seq_length)
+            #end_one_hot = torch.LongTensor(*score_s.size())
+            #end_one_hot.zero_()
+            #end_one_hot.scatter_(1, target_e, 1)
+            end_one_hot = one_hot(target_e)
+
+            #start_cumsum = tf.cumsum(start_one_hot, axis=-1)
+            #end_cumsum = tf.cumsum(end_one_hot, axis=-1)
+            start_cumsum = torch.cumsum(start_one_hot, dim=1)
+            end_cumsum = torch.cumsum(end_one_hot, dim=1)
+
+            ground_truth = start_cumsum - end_cumsum + end_one_hot
+
+            #greedy_start = one_hot(tf.argmax(score_s, axis=-1))
+            greedy_start = one_hot(torch.argmax(score_s, dim=-1))
+            masked_end_logits = mask_to_start(end_logits, greedy_start)
+            #greedy_end = one_hot(tf.argmax(masked_end_logits, axis=-1))
+            greedy_end = one_hot(torch.argmax(masked_end_logits, dim=-1))
+            #greedy_start_cumsum = tf.cumsum(greedy_start, axis=-1)
+            #greedy_end_cumsum = tf.cumsum(greedy_end, axis=-1)
+
+            greedy_start_cumsum = torch.cumsum(greedy_start, dim=-1)
+            greedy_end_cumsum = torch.cumsum(greedy_end, dim=-1)
+
+            greedy_prediction = greedy_start_cumsum - greedy_end_cumsum + greedy_end
+            greedy_f1 = get_f1(greedy_prediction, ground_truth)
+
+            sampled_start_ind = tf.squeeze(tf.multinomial(tf.log(tf.nn.softmax(start_logits)), 1),
+                                                     axis=-1)
+            sampled_start = tf.one_hot(sampled_start_ind, seq_length, axis=-1)
+            masked_end_logits = mask_to_start(end_logits, sampled_start)
+            sampled_end_ind = torch.multinomial(torch.log(torch.softmax(masked_end_logits, dim=-1)), 1).squeeze()
+            sampled_end = one_hot(sampled_end_ind)
+            sampled_start_cumsum = torch.cumsum(sampled_start, dim=-1)
+            sampled_end_cumsum = torch.cumsum(sampled_end, dim=-1)
+            sampled_prediction = sampled_start_cumsum - sampled_end_cumsum + sampled_end
+            sampled_f1 = get_f1(sampled_prediction, ground_truth)
+            reward = sampled_f1 - greedy_f1
+            sampled_start_loss = F.cross_entropy(score_s, sampled_start)
+            sampled_end_loss = F.cross_entropy(score_e, sampled_end)
+            if self.args.rl_rmr:
+                reward = torch.clamp(reward, 0., 1e7)
+                reward_greedy = torch.clamp(greedy_f1 - sampled_f1, 0., 1e7)
+                greedy_start_loss = F.cross_entropy(score_s, greedy_start)
+                greedy_end_loss = F.cross_entropy(score_e, greedy_end)
+                rl_loss = (reward * (sampled_start_loss + sampled_end_loss) + reward_greedy * (
+                                    greedy_start_loss + greedy_end_loss)).mean()
+            else:
+                rl_loss = tf.reduce_mean(reward * (sampled_start_loss + sampled_end_loss))
+            total_loss = (1 - self.args.alpha) * mle_loss + self.arhs.alpha * rl_loss
 
         elif self.args.smooth == 'reward':
             def f1(s, e, s_, e_):
