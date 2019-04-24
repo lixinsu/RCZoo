@@ -52,7 +52,7 @@ def tokenize(text):
 
 def load_dataset(path, mode='SQuAD'):
     """Load json file and store fields separately."""
-    if 'SQuAD' == mode:
+    if 'squad' == mode.lower():
         with open(path) as f:
             data = json.load(f)['data']
         output = {'qids': [], 'questions': [], 'answers': [],
@@ -227,10 +227,7 @@ out_file = os.path.join(
     args.out_dir, '%s-processed-%s.txt' % (args.split, args.tokenizer)
 )
 print('Will write to file %s' % out_file, file=sys.stderr)
-multispan = False
-if 'multispan' == args.mode:
-    multispan = True
 with open(out_file, 'w') as f:
-    for ex in process_dataset(dataset, args.tokenizer, args.workers, multispan=multispan):
+    for ex in process_dataset(dataset, args.tokenizer, args.workers, multispan=('multispan' == args.mode)):
         f.write(json.dumps(ex) + '\n')
 print('Total time: %.4f (s)' % (time.time() - t0))

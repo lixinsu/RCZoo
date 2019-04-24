@@ -15,6 +15,7 @@ import sys
 import subprocess
 import logging
 
+import yaml
 from tensorboardX import SummaryWriter
 
 from reader.bidafv1 import utils, vector, config, data
@@ -527,6 +528,15 @@ def main(args):
             stats['best_valid'] = result[args.valid_metric]
 
 
+def reset_external_parameters(args, config_file):
+    new_params = yaml.load(open(config_file))
+
+    for k, v in new_params.items():
+        if k not in args:
+            raise ValueError("Undefined paramters {}".format(k))
+        setattr(args, k, v)
+
+
 if __name__ == '__main__':
     # Parse cmdline args and setup environment
     parser = argparse.ArgumentParser(
@@ -536,8 +546,9 @@ if __name__ == '__main__':
     add_train_args(parser)
     config.add_model_args(parser)
     args = parser.parse_args()
+    config_file = os.path.join(args.model_dir, 'params.yaml')
+    reset_external_parameters(args, config_file)
     set_defaults(args)
-
     # Set cuda
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     if args.cuda:
@@ -556,8 +567,6 @@ if __name__ == '__main__':
     console = logging.StreamHandler()
     console.setFormatter(fmt)
     logger.addHandler(console)
-    if os.path.exists(args.log_file):
-        raise "Stop overwriting existing log file"
     if args.log_file:
         if args.checkpoint:
             logfile = logging.FileHandler(args.log_file, 'a')

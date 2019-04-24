@@ -358,9 +358,11 @@ class DocReader(object):
             def calculate_reward(s, e, n, pad_n, val=-2000):
                 start = [val] * pad_n
                 end = [val] * pad_n
-                for i in range(max(0, s - 5), e + 1):
+                for i in range(0, e + 1):
+                #for i in range(max(0, s - 5), e + 1):
                     start[i] = f1(s, e, i, e)
-                for i in range(s, min(n, e + 5)):
+                #for i in range(s, min(n, e + 5)):
+                for i in range(s, n):
                     end[i] = f1(s, e, s, i)
                 return start, end
 
@@ -400,11 +402,13 @@ class DocReader(object):
                 start_gt = main_s * (1 - alpha) + alpha * start_gt
                 end_gt += main_e * (1 - alpha) + alpha * end_gt
 
+            def cross_entropy(log_proba, gt):
+                return torch.sum( - gt * log_proba, dim=1 ).mean()
+
             loss = F.kl_div(score_s, start_gt,
                             reduction='batchmean') +\
-                   F.kl_div(score_e,
-                                                              end_gt,
-                                                              reduction='batchmean')
+                   F.kl_div(score_e, end_gt, reduction='batchmean')
+
             if self.args.multiloss:
                 loss = loss * self.args.newloss_scale + \
                        F.nll_loss(score_s, target_s) + \
