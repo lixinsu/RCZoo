@@ -549,6 +549,7 @@ if __name__ == '__main__':
     config_file = os.path.join(args.model_dir, 'params.yaml')
     reset_external_parameters(args, config_file)
     set_defaults(args)
+
     # Set cuda
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     if args.cuda:
@@ -575,6 +576,6 @@ if __name__ == '__main__':
         logfile.setFormatter(fmt)
         logger.addHandler(logfile)
     logger.info('COMMAND: %s' % ' '.join(sys.argv))
-
+    logger.info('ARGS{}'.format(vars(args)))
     # Run!
     main(args)
