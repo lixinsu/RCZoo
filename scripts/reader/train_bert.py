@@ -47,7 +47,7 @@ from reader.bert.tokenization import (BasicTokenizer,
                                                   BertTokenizer,
                                                   whitespace_tokenize)
 from reader.bert.vector import convert_examples_to_features
-from reader.bert.data import read_squad_examples, read_multi_examples
+from reader.bert.data import read_squad_examples, read_multi_examples, read_marco_examples
 from reader.bert.utils import write_predictions, write_predictions_couple_labeling, write_predictions_single_labeling
 
 if sys.version_info[0] == 2:
@@ -214,6 +214,10 @@ def main():
         read_examples = read_squad_examples
     elif args.task == 'multi':
         read_examples = read_multi_examples
+    elif args.task == 'marco':
+        read_examples = read_marco_examples
+    else:
+        raise ValueError('Unsupport task/datasets {}'.format(args.task))
 
     train_examples = None
     num_train_optimization_steps = None
@@ -443,7 +447,7 @@ def main():
                           args.do_lower_case, output_prediction_file,
                           output_nbest_file, output_null_log_odds_file, args.verbose_logging,
                           args.version_2_with_negative, args.null_score_diff_threshold)
-        elif args.task == 'squad' or (args.task=='multi' and args.loss_type=='origin'):
+        elif args.task == 'squad' or ((args.task=='multi' or args.task == 'marco') and args.loss_type=='origin'):
             write_predictions(eval_examples, eval_features, all_results,
                           args.n_best_size, args.max_answer_length,
                           args.do_lower_case, output_prediction_file,
