@@ -1,0 +1,14 @@
+task: multi
+loss_type: origin
+train_file: datasets/squadv1/train-v1.1.json.multi
+predict_file: datasets/squadv1/dev-v1.1.json.multi
+bert_model: bert-base-uncased
+do_train: true
+do_predict: true
+do_lower_case: true
+train_batch_size: 16
+predict_batch_size: 16
+max_seq_length: 500
+doc_stride: 128
+max_query_length: 64
+debug: false
