@@ -154,3 +154,74 @@ def read_multi_examples(input_file, is_training, version_2_with_negative=False):
                 is_impossible=is_impossible)
         examples.append(example)
     return examples
+
+
+def read_marco_examples(input_file, is_training, version_2_with_negative=None):
+  """Read a MARCO json file into a list of SquadExample."""
+  def is_whitespace(c):
+    if c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F:
+      return True
+    return False
+
+  examples = []
+  for entry in open(input_file):
+    data = json.loads(entry)
+    paragraph_text = data["passage"]
+    doc_tokens = []
+    char_to_word_offset = []
+    prev_is_whitespace = True
+    for c in paragraph_text:
+      if is_whitespace(c):
+        prev_is_whitespace = True
+      else:
+        if prev_is_whitespace:
+          doc_tokens.append(c)
+        else:
+          doc_tokens[-1] += c
+        prev_is_whitespace = False
+      char_to_word_offset.append(len(doc_tokens) - 1)
+
+    qas_id = data["id"]
+    question_text = data["query"]
+    start_position = None
+    end_position = None
+    orig_answer_text = None
+    is_impossible = False
+    if is_training:
+      is_impossible = False
+      if not is_impossible:
+        orig_answer_text = data["answer_text"]
+        answer_offset = data["answer_start"]
+        answer_length = len(orig_answer_text)
+        start_position = char_to_word_offset[answer_offset]
+        end_position = char_to_word_offset[answer_offset + answer_length - 1]
+        # Only add answers where the text can be exactly recovered from the
+        # document. If this CAN'T happen it's likely due to weird Unicode
+        # stuff so we will just skip the example.
+        #
+        # Note that this means for training mode, every example is NOT
+        # guaranteed to be preserved.
+        actual_text = " ".join(
+            doc_tokens[start_position:(end_position + 1)])
+        cleaned_answer_text = " ".join(
+            whitespace_tokenize(orig_answer_text))
+        if actual_text.find(cleaned_answer_text) == -1:
+          print("Could not find answer: '%s' vs. '%s'",
+                             actual_text, cleaned_answer_text)
+          continue
+      else:
+        start_position = -1
+        end_position = -1
+        orig_answer_text = ""
+
+    example = SquadExample(
+        qas_id=qas_id,
+        question_text=question_text,
+        doc_tokens=doc_tokens,
+        orig_answer_text=orig_answer_text,
+        start_position=start_position,
+        end_position=end_position,
+        is_impossible=is_impossible)
+    examples.append(example)
+  print('\nHas {} examples\n'.format(len(examples)))
+  return examples
