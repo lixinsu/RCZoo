@@ -223,7 +223,7 @@ def main():
     num_train_optimization_steps = None
     if args.do_train:
         train_examples = read_examples(
-            input_file=args.train_file, is_training=True, version_2_with_negative=args.version_2_with_negative)
+            input_file=args.train_file, is_training=True, version_2_with_negative=args.version_2_with_negative, debug=args.debug)
         if args.debug:
             train_examples = train_examples[:100]
         num_train_optimization_steps = int(
@@ -341,10 +341,11 @@ def main():
                 if args.gradient_accumulation_steps > 1:
                     loss = loss / args.gradient_accumulation_steps
 
-                if args.fp16:
-                    optimizer.backward(loss)
-                else:
-                    loss.backward()
+               # if args.fp16:
+               #     optimizer.backward(loss)
+               # else:
+                loss.backward()
+
                 if (step + 1) % args.gradient_accumulation_steps == 0:
                     if args.fp16:
                         # modify learning rate with special warm up BERT uses
@@ -386,7 +387,7 @@ def main():
 
     if args.do_predict and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         eval_examples = read_examples(
-            input_file=args.predict_file, is_training=False, version_2_with_negative=args.version_2_with_negative)
+            input_file=args.predict_file, is_training=False, version_2_with_negative=args.version_2_with_negative, debug=args.debug)
         if args.debug:
             eval_examples = eval_examples[:100]
         eval_features = convert_examples_to_features(
