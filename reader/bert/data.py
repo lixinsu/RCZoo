@@ -67,7 +67,7 @@ def split_by_space(paragraph_text):
         char_to_word_offset.append(len(doc_tokens) - 1)
     return doc_tokens, char_to_word_offset
 
-def read_squad_examples(input_file, is_training, version_2_with_negative):
+def read_squad_examples(input_file, is_training, version_2_with_negative, debug=False):
     """Read a SQuAD json file into a list of SquadExample."""
     with open(input_file, "r", encoding='utf-8') as reader:
         input_data = json.load(reader)["data"]
@@ -127,7 +127,7 @@ def read_squad_examples(input_file, is_training, version_2_with_negative):
     return examples
 
 
-def read_multi_examples(input_file, is_training, version_2_with_negative=False):
+def read_multi_examples(input_file, is_training, version_2_with_negative=False, debug=False):
     input_data = [json.loads(line) for line in open(input_file)]
     examples = []
     for entry in input_data:
@@ -156,7 +156,7 @@ def read_multi_examples(input_file, is_training, version_2_with_negative=False):
     return examples
 
 
-def read_marco_examples(input_file, is_training, version_2_with_negative=None):
+def read_marco_examples(input_file, is_training, version_2_with_negative=None, debug=False):
   """Read a MARCO json file into a list of SquadExample."""
   def is_whitespace(c):
     if c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F:
@@ -164,7 +164,11 @@ def read_marco_examples(input_file, is_training, version_2_with_negative=None):
     return False
 
   examples = []
+  cnt = 128
   for entry in open(input_file):
+    cnt -= 1
+    if debug and cnt ==0:
+        break
     data = json.loads(entry)
     paragraph_text = data["passage"]
     doc_tokens = []

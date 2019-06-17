@@ -18,6 +18,4 @@ DATA_DIR = (
 )
 
 from . import tokenizers
-from . import layers
-from . import docqa
 
