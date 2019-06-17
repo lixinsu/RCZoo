@@ -1197,6 +1197,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         # TODO check with Google if it's normal there is no dropout on the token classifier of SQuAD in the TF version
         # self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.apply(self.init_bert_weights)
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, start_positions=None, end_positions=None, start_vector=None, end_vector=None, content_vector=None, loss_type=None):
@@ -1205,36 +1206,94 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1)
         end_logits = end_logits.squeeze(-1)
-        if start_vector is not None and end_vector is not None and loss_type=='double':
-            passage_mask = token_type_ids.float()
-            start_loss = F.binary_cross_entropy_with_logits(start_logits, start_vector, reduction='none')
-            end_loss = F.binary_cross_entropy_with_logits(end_logits, end_vector, reduction='none')
-            start_loss = (start_loss * passage_mask).sum(dim=1) / passage_mask.sum(dim=1)
-            end_loss = (end_loss * passage_mask).sum(dim=1) / passage_mask.sum(dim=1)
-            loss = start_loss.mean() + end_loss.mean()
+        if (start_positions is not None and end_positions is not None):
+            if loss_type == 'origin':
+                loss = self._mle_loss(start_logits, end_logits, start_positions, end_positions)
+            elif loss_type == 'rl_f1':
+                loss = self._mle_loss(start_logits, end_logits, start_positions, end_positions) + \
+                        self._rl_f1_loss(start_logits, end_logits, start_positions, end_positions)
+            else:
+                raise ValueError("Unsupported loss type {}".format(loss_type))
             return loss
-
-        elif content_vector is not None and loss_type=='single':
-            loss =  F.binary_cross_entropy_with_logits(start_logits, content_vector, reduction='none')
-            passage_mask = token_type_ids.float()
-            loss = (loss * passage_mask).sum(dim=1) / passage_mask.sum(dim=1)
-            return loss.mean()
-
-        elif loss_type=='origin' or (start_positions is not None and end_positions is not None):
-            # If we are on multi-GPU, split add a dimension
-            if len(start_positions.size()) > 1:
-                start_positions = start_positions.squeeze(-1)
-            if len(end_positions.size()) > 1:
-                end_positions = end_positions.squeeze(-1)
-            # sometimes the start/end positions are outside our model inputs, we ignore these terms
-            ignored_index = start_logits.size(1)
-            start_positions.clamp_(0, ignored_index)
-            end_positions.clamp_(0, ignored_index)
-
-            loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
-            start_loss = loss_fct(start_logits, start_positions)
-            end_loss = loss_fct(end_logits, end_positions)
-            total_loss = (start_loss + end_loss) / 2
-            return total_loss
         else:
             return start_logits, end_logits
+
+    def _mle_loss(self, start_logits, end_logits, start_positions, end_positions):
+        ignored_index = start_logits.size(1)
+        start_positions.clamp_(0, ignored_index)
+        end_positions.clamp_(0, ignored_index)
+        loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
+        start_loss = loss_fct(start_logits, start_positions)
+        end_loss = loss_fct(end_logits, end_positions)
+        total_loss = (start_loss + end_loss) / 2
+        return total_loss
+
+
+    def _onehot(self, position_tensor, depth):
+        rv = torch.zeros([position_tensor.size(0), depth], device=self.device)
+        rv.scatter_(1, position_tensor.unsqueeze(-1), 1)
+        return rv
+
+    def _get_f1(self, y_pred, y_true):
+        y_true = y_true.float()
+        y_pred = y_pred.float()
+        y_union = torch.clamp(y_pred + y_true, 0, 1)  # [bs, seq]
+        y_diff = torch.abs(y_pred - y_true)  # [bs, seq]
+        num_same = torch.sum(y_union, dim=-1) - torch.sum(y_diff, dim=-1) # [bs,]
+        y_precision = num_same / (torch.sum(y_pred, dim=-1) + 1e-7)  # [bs,]
+        y_recall = num_same / (torch.sum(y_true, dim=-1) + 1e-7)  # [bs,]
+        y_f1 = (2.0 * y_precision * y_recall) / ((y_precision + y_recall) + 1e-7)  # [bs,]
+        return torch.clamp(y_f1, 0, 1)
+
+
+    def _rl_f1_loss(self, start_logits, end_logits, start_positions, end_positions):
+        """
+        RL-based loss using F1 as reward measurement.
+        """
+        def mask_to_start(score, start, score_mask_value=-1e30):
+            score_mask = (torch.ones_like(start, device=self.device) - torch.cumsum(start, dim=-1)).float()
+            return score + score_mask * score_mask_value
+
+        score_s = torch.log_softmax(start_logits, dim=-1)
+        score_e = torch.log_softmax(end_logits, dim=-1)
+        # 真实位置
+        seq_length = score_s.size(1)
+        start_one_hot = self._onehot(start_positions, seq_length)
+        end_one_hot = self._onehot(end_positions, seq_length)
+        start_cumsum = torch.cumsum(start_one_hot, dim=1)
+        end_cumsum = torch.cumsum(end_one_hot, dim=1)
+        ground_truth = start_cumsum - end_cumsum + end_one_hot
+        # 基线
+        greedy_start_ind = torch.argmax(score_s, dim=-1)
+        greedy_start = self._onehot(greedy_start_ind, seq_length)
+        masked_end_logits = mask_to_start(score_e, greedy_start)
+        greedy_end_ind = torch.argmax(masked_end_logits, dim=-1)
+        greedy_end = self._onehot(greedy_end_ind, seq_length)
+        greedy_start_cumsum = torch.cumsum(greedy_start, dim=-1)
+        greedy_end_cumsum = torch.cumsum(greedy_end, dim=-1)
+        greedy_prediction = greedy_start_cumsum - greedy_end_cumsum + greedy_end
+        greedy_f1 = self._get_f1(greedy_prediction, ground_truth)
+        # 采样的答案
+        sampled_start_ind = torch.multinomial(torch.exp(score_s), 1).squeeze()
+        sampled_start = self._onehot(sampled_start_ind, seq_length)
+        masked_end_logits = mask_to_start(torch.exp(score_e), sampled_start)
+        sampled_end_ind = torch.multinomial(torch.softmax(masked_end_logits, dim=-1), 1).squeeze()
+        sampled_end = self._onehot(sampled_end_ind, seq_length)
+        sampled_start_cumsum = torch.cumsum(sampled_start, dim=-1)
+        sampled_end_cumsum = torch.cumsum(sampled_end, dim=-1)
+        sampled_prediction = sampled_start_cumsum - sampled_end_cumsum + sampled_end
+        sampled_f1 = self._get_f1(sampled_prediction, ground_truth)
+
+        reward = sampled_f1 - greedy_f1
+
+        sampled_start_loss = F.nll_loss(score_s, sampled_start_ind, reduction='none')
+        sampled_end_loss = F.nll_loss(score_e, sampled_end_ind, reduction='none')
+
+        greedy_start_loss = F.nll_loss(score_s, greedy_start_ind, reduction='none')
+        greedy_end_loss = F.nll_loss(score_e, greedy_end_ind, reduction='none')
+
+        reward = torch.clamp(reward, 0., 1e7)
+        reward_greedy = torch.clamp(greedy_f1 - sampled_f1, 0., 1e7)
+        rl_loss = (reward * (sampled_start_loss + sampled_end_loss) + reward_greedy * (
+                                greedy_start_loss + greedy_end_loss)).mean()
+        return rl_loss
