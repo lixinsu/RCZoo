@@ -24,6 +24,7 @@ from .rnn_reader import RnnDocReader
 logger = logging.getLogger(__name__)
 
 
+
 class DocReader(object):
     """High level model that handles intializing the underlying network
     architecture, saving, updating examples, and predicting examples.
@@ -293,7 +294,7 @@ class DocReader(object):
                    torch.sum(- end_gt * score_e, -1)
             loss = loss.mean()
 
-        elif self.args.smooth == 'reinforcement':
+        elif self.args.smooth == 'xxxx':
             def f1(s, e, s_, e_):
                 gt = set(range(s, e + 1))
                 pr = set(range(s_, e_ + 1))
@@ -341,8 +342,90 @@ class DocReader(object):
                    self.args.newloss_scale * augment_loss.mean()
 
 
-        elif self.args.smooth == 'reinforcement_mnemonic':
-            pass
+        elif self.args.smooth == 'dcrl' or  self.args.smooth == 'scst':
+            def mask_to_start(score, start, score_mask_value=-1e30):
+                score_mask = (torch.ones_like(start).cuda() - torch.cumsum(start, dim=-1)).float()
+                return score + score_mask * score_mask_value
+
+            def get_f1(y_pred, y_true):
+                y_true = y_true.float()
+                y_pred = y_pred.float()
+                y_union = torch.clamp(y_pred + y_true, 0, 1)  # [bs, seq]
+                y_diff = torch.abs(y_pred - y_true)  # [bs, seq]
+                num_same = (torch.sum(y_union, dim=-1) - torch.sum(y_diff, dim=-1)).float()  # [bs,]
+                y_precision = num_same / (torch.sum(y_pred, dim=-1).float() + 1e-7)  # [bs,]
+                y_recall = num_same / (torch.sum(y_true, dim=-1).float() + 1e-7)  # [bs,]
+                y_f1 = (2.0 * y_precision * y_recall) / ((y_precision + y_recall).float() + 1e-7)  # [bs,]
+                return torch.clamp(y_f1, 0, 1)
+
+            def one_hot(tensor):
+                rv = torch.LongTensor(score_s.size()).cuda()
+                rv.zero_()
+                rv.scatter_(1, tensor.unsqueeze(1), 1)
+                return rv
+            #start_one_hot = tf.one_hot(start_positions, depth=seq_length)
+            #start_one_hot = torch.LongTensor(*score_s.size())
+            #start_one_hot.zero_()
+            #start_one_hot.scatter_(1, target_s, 1)
+            import ipdb
+            ipdb.set_trace()
+            start_one_hot = one_hot(target_s)
+
+            #end_one_hot = tf.one_hot(end_positions, depth=seq_length)
+            #end_one_hot = torch.LongTensor(*score_s.size())
+            #end_one_hot.zero_()
+            #end_one_hot.scatter_(1, target_e, 1)
+            end_one_hot = one_hot(target_e)
+
+            #start_cumsum = tf.cumsum(start_one_hot, axis=-1)
+            #end_cumsum = tf.cumsum(end_one_hot, axis=-1)
+            start_cumsum = torch.cumsum(start_one_hot, dim=1)
+            end_cumsum = torch.cumsum(end_one_hot, dim=1)
+
+            ground_truth = start_cumsum - end_cumsum + end_one_hot
+
+            #greedy_start = one_hot(tf.argmax(score_s, axis=-1))
+            greedy_start_ind = torch.argmax(score_s, dim=-1)
+            greedy_start = one_hot(greedy_start_ind)
+            masked_end_logits = mask_to_start(score_e, greedy_start)
+            #greedy_end = one_hot(tf.argmax(masked_end_logits, axis=-1))
+            greedy_end_ind = torch.argmax(masked_end_logits, dim=-1)
+            greedy_end = one_hot(greedy_end_ind)
+            #greedy_start_cumsum = tf.cumsum(greedy_start, axis=-1)
+            #greedy_end_cumsum = tf.cumsum(greedy_end, axis=-1)
+
+            greedy_start_cumsum = torch.cumsum(greedy_start, dim=-1)
+            greedy_end_cumsum = torch.cumsum(greedy_end, dim=-1)
+
+            greedy_prediction = greedy_start_cumsum - greedy_end_cumsum + greedy_end
+            greedy_f1 = get_f1(greedy_prediction, ground_truth)
+
+            sampled_start_ind = torch.multinomial(torch.softmax(score_s, dim=-1), 1).squeeze()
+            sampled_start = one_hot(sampled_start_ind)
+            masked_end_logits = mask_to_start(score_e, sampled_start)
+            sampled_end_ind = torch.multinomial(torch.softmax(masked_end_logits, dim=-1), 1).squeeze()
+            sampled_end = one_hot(sampled_end_ind)
+            sampled_start_cumsum = torch.cumsum(sampled_start, dim=-1)
+            sampled_end_cumsum = torch.cumsum(sampled_end, dim=-1)
+            sampled_prediction = sampled_start_cumsum - sampled_end_cumsum + sampled_end
+            sampled_f1 = get_f1(sampled_prediction, ground_truth)
+            reward = sampled_f1 - greedy_f1
+
+            sampled_start_loss = F.cross_entropy(score_s, sampled_start_ind)
+            sampled_end_loss = F.cross_entropy(score_e, sampled_end_ind)
+
+            greedy_start_loss = F.cross_entropy(score_s, greedy_start_ind)
+            greedy_end_loss = F.cross_entropy(score_e, greedy_end_ind)
+
+            mle_loss = F.cross_entropy(score_s, target_s) + F.cross_entropy(score_e, target_e)
+            if  self.args.smooth == 'dcrl':
+                reward = torch.clamp(reward, 0., 1e7)
+                reward_greedy = torch.clamp(greedy_f1 - sampled_f1, 0., 1e7)
+                rl_loss = (reward * (sampled_start_loss + sampled_end_loss) + reward_greedy * (
+                                    greedy_start_loss + greedy_end_loss)).mean()
+            else:
+                rl_loss = (reward * (sampled_start_loss + sampled_end_loss)).mean()
+            loss = (1 - self.args.alpha) * mle_loss + self.args.alpha * rl_loss
 
         elif self.args.smooth == 'reward':
             def f1(s, e, s_, e_):
@@ -359,9 +442,7 @@ class DocReader(object):
                 start = [val] * pad_n
                 end = [val] * pad_n
                 for i in range(0, e + 1):
-                #for i in range(max(0, s - 5), e + 1):
                     start[i] = f1(s, e, i, e)
-                #for i in range(s, min(n, e + 5)):
                 for i in range(s, n):
                     end[i] = f1(s, e, s, i)
                 return start, end
@@ -381,38 +462,18 @@ class DocReader(object):
             start_gt = []
             end_gt = []
             for s, e, n in zip(start_mu, end_mu, doc_lengths):
-                if self.args.use_softmax:
-                    start_, end_ = calculate_reward(s, e, n, ex[2].size(1))
-                    start_gt.append(softmax(start_, self.args.temperature))
-                    end_gt.append(softmax(end_, self.args.temperature))
-                else:
-                    start_, end_ = calculate_reward(s, e, n, ex[2].size(1),
-                                                    val=0)
-                    start_gt.append(start_)
-                    end_gt.append(end_)
+                start_, end_ = calculate_reward(s, e, n, ex[2].size(1))
+                start_gt.append(softmax(start_, self.args.temperature))
+                end_gt.append(softmax(end_, self.args.temperature))
             start_gt = torch.Tensor(start_gt).cuda()
             end_gt = torch.Tensor(end_gt).cuda()
-
-            if self.args.interpolation_inside:
-                alpha = self.args.alpha
-                main_s = torch.zeros(score_e.size()).cuda()
-                main_e = torch.zeros(score_e.size()).cuda()
-                main_s.scatter_(1, target_s.unsqueeze(1), 1)
-                main_e.scatter_(1, target_e.unsqueeze(1), 1)
-                start_gt = main_s * (1 - alpha) + alpha * start_gt
-                end_gt += main_e * (1 - alpha) + alpha * end_gt
 
             def cross_entropy(log_proba, gt):
                 return torch.sum( - gt * log_proba, dim=1 ).mean()
 
-            loss = F.kl_div(score_s, start_gt,
-                            reduction='batchmean') +\
-                   F.kl_div(score_e, end_gt, reduction='batchmean')
-
-            if self.args.multiloss:
-                loss = loss * self.args.newloss_scale + \
-                       F.nll_loss(score_s, target_s) + \
-                       F.nll_loss(score_e, target_e)
+            rls_loss = cross_entropy(score_s, start_gt) + cross_entropy(score_e, end_gt)
+            mle_loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+            loss = rls_loss * self.args.alpha + (1-self.args.alpha) * mle_loss
 
         elif self.args.smooth == 'ce':
             # Compute loss and accuracies
@@ -420,7 +481,7 @@ class DocReader(object):
                                                               target_e)
 
         else:
-            raise "Undefine loss"
+            raise ValueError("Undefine loss")
         # Clear gradients and run backward
         self.optimizer.zero_grad()
         loss.backward()

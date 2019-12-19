@@ -47,6 +47,8 @@ def add_train_args(parser):
 
     # Runtime environment
     runtime = parser.add_argument_group('Environment')
+    runtime.add_argument('--debug',action='store_true',
+                         help='Whether enter debug mode')
     runtime.add_argument('--exp-id', type=str, default="test",
                          help='Used to label the experiment id')
     runtime.add_argument('--exp-desc', type=str, default="test exp",
@@ -208,7 +210,7 @@ def init_from_scratch(args, train_exs, dev_exs):
     model = DocReader(config.get_model_args(args), word_dict, char_dict, feature_dict)
 
     # Load pretrained embeddings for words in dictionary
-    if args.embedding_file:
+    if args.embedding_file and not args.debug:
         model.load_embeddings(word_dict.tokens(), args.embedding_file)
 
     return model
@@ -549,6 +551,7 @@ if __name__ == '__main__':
     config_file = os.path.join(args.model_dir, 'params.yaml')
     reset_external_parameters(args, config_file)
     set_defaults(args)
+
     # Set cuda
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     if args.cuda:
@@ -575,6 +578,6 @@ if __name__ == '__main__':
         logfile.setFormatter(fmt)
         logger.addHandler(logfile)
     logger.info('COMMAND: %s' % ' '.join(sys.argv))
-
+    logger.info('ARGS{}'.format(vars(args)))
     # Run!
     main(args)

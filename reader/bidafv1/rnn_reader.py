@@ -181,7 +181,11 @@ class RnnDocReader(nn.Module):
 
         softmax_end = F.softmax(end_logits, dim=-1)
 
+
+
         if self.training:
+            if self.args.smooth in  set(['scst', 'dcrl']):
+                return start_logits, end_logits
             start_scores = torch.log(softmax_start + 1e-20)
             end_scores = torch.log(softmax_end + 1e-20)
         else:

@@ -16,8 +16,8 @@ MODEL_ARCHITECTURE = {
     'model_type', 'embedding_dim', 'hidden_size', 'doc_layers',
     'question_layers', 'rnn_type', 'concat_rnn_layers', 'question_merge',
     'use_qemb', 'use_in_question', 'use_pos', 'use_ner', 'use_lemma', 'use_tf',
-    'smooth', 'smooth_scale', 'add_main', 'temperature','multiloss', 'newloss_scale',
-    'use_softmax', 'interpolation_inside', 'alpha', 'normal_alpha'
+    'smooth', 'smooth_scale', 'add_main', 'temperature','multiloss',
+    'use_softmax', 'alpha', 'normal_alpha'
 }
 
 # Index of arguments concerning the model optimizer/training
@@ -78,12 +78,6 @@ def add_model_args(parser):
                         help='Add main position')
     detail.add_argument('--temperature', type=float, default=0.5,
                         help='softmax temperature')
-    detail.add_argument('--newloss-scale', type=float, default=1.0,
-                        help='Loss scale')
-    detail.add_argument('--use-softmax', type='bool', default=True,
-                        help='Whether use softmax')
-    detail.add_argument('--interpolation-inside', type='bool', default='False',
-                        help='Whether interplote in the proba')
     detail.add_argument('--alpha', type=float, default=0,
                         help='Interplote weight')
     detail.add_argument('--normal-alpha', type=float, default=0,
